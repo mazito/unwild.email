@@ -70,6 +70,6 @@ None (fresh repo; everything is a creation in this session).
 - Server: `@unwild/lib` (workspace).
 
 ### Commits
-- `<to be filled after commit>`
+- `e7fc4b6` - chore: initial bootstrap — P0-P2 skeletons, FP lib, RPC, Svelte 5 app
 
 ---
