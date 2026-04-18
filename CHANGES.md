@@ -4,6 +4,33 @@
 ## Branch: main
 
 ### Files Created
+- **docs/EMAILS-BASE-MODEL.md** — raw-email relational model in DuckDB SQL.
+  18 tables, conventions block at top (uid PK, _utc, _uid, _by, _kind,
+  is_/has_, _bytes/_count/_sha256/_json/_ref/_raw/_normalized, lifecycle
+  columns, column order, CHECK over ENUM). Covers users, accounts,
+  mailboxes, emails, email_headers, addresses, email_addresses,
+  mime_parts, attachments, calendar_invites, received_hops, auth_results,
+  dkim_signatures, list_metadata, threads, thread_references, keywords,
+  email_keywords. Sample queries + open questions.
+
+### Storage-layout design decisions (folded into EMAILS-BASE-MODEL.md)
+- Server data split across `data/{duckdb,lmdb,raw,documents}`.
+- **Sync state out of scope** — removed `sync_checkpoints` table; will
+  live in LMDB, future `docs/SYNC-MODEL.md`.
+- **Raw RFC 5322 bytes → Parquet** — removed `raw_messages` table; bytes
+  stored in append-only shards under `data/raw/account=<uid>/yyyy-mm=<YYYY-MM>/`,
+  queried via `read_parquet()` joined on `emails.raw_sha256`.
+- **Attachments/binary MIME parts** → content-addressed at
+  `data/documents/<sha256[0:2]>/<sha256>`. Removed `storage_ref`,
+  `body_blob`, `body_blob_ref` columns.
+
+### Under review (not resolved)
+- User added `!!!` annotations to `docs/EMAILS-BASE-MODEL.md`; review
+  ongoing. See MEMO.md for open threads (sha256-vs-uid as filename,
+  Parquet PK, `_to` convention, `_ref` for internal files, `users`
+  table concept).
+
+### Files Created (earlier in the day)
 - **docs/EMAIL-DATA.md** — exhaustive catalog of extractable email fields
   with IETF/W3C references. Sections: scope & assumptions, message anatomy,
   IMAP transport metadata, SMTP envelope residue, RFC 5322 headers, MIME

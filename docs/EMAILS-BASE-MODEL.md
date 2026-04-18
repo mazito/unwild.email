@@ -56,8 +56,10 @@ server/
 
 1. **DuckDB** holds the relational model defined in this doc. No BLOBs of
    raw email or attachment bytes. Keep it lean so analytical scans stay fast.
+
 2. **LMDB** holds sync state and any high-churn KV / job queue. Nothing in
    this doc touches it.
+
 3. **`raw/`** is append-only Parquet. Each file is a shard of raw RFC 5322
    envelopes, partitioned by `account_uid` and month of
    `internal_date_utc`. Columns (minimum): `email_uid UUID`, `raw_sha256
@@ -67,10 +69,14 @@ server/
      hive_partitioning=TRUE)` when we need to re-verify DKIM, export,
      reprocess, etc.
    - Retention = per-file (drop a partition to drop a month).
+
 4. **`documents/`** is a content-addressed store for attachments and any
    binary MIME leaf worth keeping (inline images, etc.). The file name
    **is** the `content_sha256`. No directory index needed — DuckDB rows
    carry the sha256 and the path is a pure function of it.
+
+   > !!! seems ok, only i have a question. Using the content hash as the filename is quite usual and good in general. Only asking if using the document uid (v7) would not be better and consistent with the table keys and uids. Not big deal really, just considering alts. . Not sure if sha256 hashes are more efficient as keys that UUID v7 (which is finally a bigint).
+
 5. **No inline `BLOB` columns** in DuckDB for either raw messages or
    attachment bodies. If we ever need to co-locate a few small inline
    binaries for speed, we'll revisit; for now the rule is simple and the
@@ -88,6 +94,8 @@ server/
 - `mime_parts` keeps `body_text` inline for text parts. Binary parts keep
   only metadata + `content_sha256`; the bytes live in `documents/` (if
   they're worth keeping) or aren't kept at all (ephemeral inline).
+
+> !!! The same here, i thing we should store the email uid as the primary key for the raw email too, so joining raw and tables can be easier latter eventually. Not sure if sha256 hashes are more efficient as keys that UUID v7 (which is finally a bigint).
 
 ---
 
@@ -144,6 +152,10 @@ Examples: `created_by_uid` + `created_by`, `assigned_to_uid` + `assigned_to`,
 > is what you show in a historical log without a join.
 > Using `creator_fullname` would be more explicit but `_by` is idiomatic and
 > short enough for frequent queries.
+>
+> !!! Good conclusion. Was not sure about this but you nailed it.
+>
+> !!! NOTE that '_to' as you mentioned in some exmaples may play a similar role. It si clear in any case the meaning of _by and _to. 
 
 ### 0.5 Type-suffix conventions
 
@@ -165,7 +177,12 @@ Examples: `created_by_uid` + `created_by`, `assigned_to_uid` + `assigned_to`,
 | `is_*` / `has_*` prefix | Boolean | `is_draft`, `has_attachments` |
 | `position` | 0-based order within a parent | `position` |
 
+> !!! need to ask the '_to' suffix convention similar to '_by'. Also '_to_uid'. 
+>
+> !!! The '_ref' is ok, though i would avoid using path/URIs for internal files. In internal files refs it is preferable to use the _uid to lacate the file, for examples if it is document, it will be in the documents folder and the {uid}.{type} will be the file name. Using the sha256 content hash is valid too as a key into the documents folder. 
+
 ### 0.6 Enums — CHECK over ENUM
+
 Closed-set fields use `TEXT` + `CHECK` (not DuckDB `ENUM`):
 
 - Extending an `ENUM` in DuckDB is awkward (requires recreating the type).
@@ -173,6 +190,8 @@ Closed-set fields use `TEXT` + `CHECK` (not DuckDB `ENUM`):
 - Suffix the column with `_kind`.
 
 Example: `role_kind TEXT NOT NULL CHECK (role_kind IN ('from','sender', …))`.
+
+> !!! Good catch !
 
 ### 0.7 JSON & STRUCT
 - Use native `JSON` type for open-ended / rarely-queried blobs
@@ -192,6 +211,7 @@ Example: `role_kind TEXT NOT NULL CHECK (role_kind IN ('from','sender', …))`.
 ### 0.9 Indexes
 DuckDB maintains zone-maps automatically; ART indexes exist for equality.
 We only declare:
+
 - `PRIMARY KEY (uid)`.
 - `UNIQUE (…)` for natural keys.
 - `CREATE INDEX` for hot equality filters (e.g. `message_id`, `content_sha256`).
@@ -280,6 +300,14 @@ CREATE TABLE users (
     deleted_utc      TIMESTAMP
 );
 ```
+
+> !!! Just to understand what is the concept of "User" here: it is the user of the server who logins to the server and uses the App, that has a user name and password  ?
+>
+> In this case the email may be incorrect as a user may have more than one email, as described in accounts.  
+>
+> How will he login ? using username and password ? or sending an OTP to his email ? But how can he receive the email if he is not logged in and can not access his mails ? Maybe using Authenticator OTPs ? 
+
+
 
 ### 2.2 `accounts`
 
