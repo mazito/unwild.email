@@ -1,4 +1,4 @@
-# EMAIL-DATA.md — Exhaustive email data fields
+# Exhaustive email data fields
 
 Working catalog of **every piece of information** we can extract from an email,
 with IETF/W3C references. Used as input for `docs/DATA-MODEL.md` (what we
