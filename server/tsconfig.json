@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@unwild/lib": ["../lib/src/index.ts"],
+      "@unwild/lib/*": ["../lib/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+.env
+.env.local
+bun.lockb
+bun.lock
+data/
+docs-data/
+*.tsbuildinfo
+.vite/
+.svelte-kit/

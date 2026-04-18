@@ -1,0 +1,26 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+@plugin 'daisyui' {
+  themes: corporate --default, dark --prefersdark;
+  root: ':root';
+}
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* App-wide tweaks */
+:root {
+  --sidebar-w: 4rem;
+  --header-h: 3.25rem;
+  font-feature-settings: 'cv11', 'ss01', 'ss03'; /* Inter: tabular & stylistic polish */
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  @apply bg-base-200 text-base-content font-sans antialiased;
+}

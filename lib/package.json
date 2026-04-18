@@ -1,0 +1,15 @@
+{
+  "name": "@unwild/lib",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fp": "./src/fp/index.ts",
+    "./rpc": "./src/rpc/index.ts",
+    "./fp/*": "./src/fp/*",
+    "./rpc/*": "./src/rpc/*",
+    "./*": "./src/*"
+  }
+}
