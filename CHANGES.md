@@ -1,3 +1,67 @@
+# CHANGES.md - Session: Router cleanup + resolve EMAILS-BASE-MODEL review
+
+## Date: 2026-04-18 (session 3)
+## Branch: main
+
+### Files Modified
+
+1. **app/src/router.svelte.ts** (new)
+   - Single consolidated hash router next to `App.svelte` with inline
+     header comment explaining the flow and how to add a page.
+   - `Route` union adds `home`; `parseHash` maps `#/` and `#/home` to
+     Home, `#/mails` to Mails; `hrefFor` treats `home` as root.
+
+2. **app/src/lib/router.ts**, **app/src/lib/router.svelte.ts** (deleted)
+   - Superseded by `app/src/router.svelte.ts`.
+
+3. **app/src/pages/Home.svelte** (new landing page)
+   - Replaces the previous Home page (which was repurposed as Mails).
+   - Grid of links to Mails / Persons & Orgs / Documents / Admin.
+
+4. **app/src/pages/Mails.svelte** (new, copy of previous Home)
+   - Holds the RPC ping demo that used to live in Home.
+
+5. **app/src/App.svelte**
+   - Import Home + Mails; render `home` and `mails` tags distinctly.
+
+6. **app/src/components/Sidebar.svelte**
+   - Import from new router location; logo now links to `home`.
+
+7. **app/src/components/Header.svelte**
+   - Import from new router location.
+
+8. **docs/EMAILS-BASE-MODEL.md**
+   - Resolved all 5 `!!!` review threads with inline Decision notes.
+   - §0.4: added `_to` / `_to_uid` as parallel to `_by` / `_by_uid`.
+   - §0.5: added `_to`, `_to_uid` rows; restricted `_ref` to external
+     resources only; added internal-files convention block.
+   - §2.1 `users`: rewrote schema — `username UNIQUE`, `login_email`
+     (recovery only), `password_hash`, `totp_secret`; removed
+     `email UNIQUE`; deferred auth details to `AUTH-MODEL.md`.
+   - §4.1 `emails`: added `account_uid` FK (denormalized from
+     `mailboxes.account_uid`) + matching index.
+   - §4.2 raw Parquet: join key is `email_uid`; `raw_sha256` demoted
+     to verification/dedup; updated sample query and footer note.
+   - §14 checklist: review item marked done.
+
+9. **docs/AUTH-MODEL.md** (new stub)
+   - Scope, core principle (login identity ≠ email), proposed user
+     fields, flows (username+password / TOTP / recovery), out-of-scope
+     list, open questions.
+
+10. **DRAFT.md**
+    - Replaced `DO` section with review Q&A for the EMAILS-BASE-MODEL
+      `!!!` threads (used to drive this session's doc edits).
+
+11. **MEMO.md**
+    - Session 3 state.
+
+### Commits
+- `c49279a` app: fix Mails route, move router next to App, add Home page
+- (pending) docs: resolve EMAILS-BASE-MODEL review threads + add AUTH-MODEL stub
+
+---
+
 # CHANGES.md - Session: Project bootstrap (P0–P2) + theming
 
 ## Date: 2026-04-18 (session 2)

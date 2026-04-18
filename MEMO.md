@@ -1,99 +1,77 @@
 # MEMO — Session State
 
-## Last Session — 2026-04-18 (session 2, cont.)
+## Last Session — 2026-04-18 (session 3)
 
 ### Branch
 `main`
 
 ### Summary
-Docs-only session. Built the raw-email relational model and iterated on
-storage decisions with the user. User is still reviewing and leaving
-`!!!` comments inline in `docs/EMAILS-BASE-MODEL.md`.
+Mixed session: small UI fix in `app/` + resolved all `!!!` review threads
+in `docs/EMAILS-BASE-MODEL.md` and spun out `docs/AUTH-MODEL.md`.
 
-1. Wrote `docs/EMAIL-DATA.md` (earlier in the day).
-2. Wrote `docs/EMAILS-BASE-MODEL.md` — DuckDB relational model, 18
-   tables, conventions block at top, sample queries, open questions.
-3. Folded three design decisions into the model:
-   - Server on-disk layout `data/{duckdb,lmdb,raw,documents}`.
-   - Sync state is **out of scope** for the emails model — moved to a
-     future `docs/SYNC-MODEL.md` (LMDB-backed). Removed
-     `sync_checkpoints` table.
-   - Raw RFC 5322 bytes → append-only Parquet shards (partitioned by
-     `account_uid` + `yyyy-mm`). Removed `raw_messages` table. Also
-     removed `body_blob`/`body_blob_ref` from `mime_parts` and
-     `storage_ref` from `attachments` — `content_sha256` is the sole
-     pointer into `data/documents/`.
-4. User started reviewing with `!!!` annotations — **session closed
-   before the review finished**.
+### UI (app/)
+- `#/mails` route was broken (sidebar link → NotFound). Router lived in
+  `app/src/lib/router*.ts` which user found unclear.
+- Consolidated both router files into a single
+  `app/src/router.svelte.ts` next to `App.svelte`, with an inline header
+  comment explaining how the hash router works and how to add a page.
+- Deleted `app/src/lib/router.ts` and `app/src/lib/router.svelte.ts`.
+- Added a real `Home` page (`app/src/pages/Home.svelte`).
+  - `#/` and `#/home` → Home (landing page with links).
+  - `#/mails` → Mails page (the one that does RPC ping).
+- Updated imports in `App.svelte`, `Sidebar.svelte`, `Header.svelte`.
+- Sidebar logo now links to `home`.
+- Committed `c49279a` and pushed.
 
-### Current state — what works
-Docs only; no code changes.
-- `bun run check` → lint + typecheck + 14/14 tests green.
-- `bun run dev:server` → Bun HTTP on `:3030`.
-- `bun run dev:app` → Vite on `:5173`.
+### Docs
+Resolved the 5 `!!!` threads in `docs/EMAILS-BASE-MODEL.md`:
 
-### Open `!!!` review threads (unresolved)
+1. **Documents filename** → keep `content_sha256` (free dedup,
+   self-proving integrity). The email↔file relation is carried by the
+   existing `attachments` table (§7.2). Decision note inline.
+2. **Raw Parquet join key** → `email_uid` (not `raw_sha256`).
+   `raw_sha256` stays as verification/dedup column. Updated §4.2 table,
+   sample query, and footer note.
+3. **`_to` suffix** → added as sibling of `_by` in §0.4 and §0.5.
+   Semantic: `_by` = subject, `_to` = object. Snapshot rationale same.
+4. **`_ref` suffix** → restricted to **external** resources only
+   (S3 URL, remote http). Internal files located by pure function of a
+   key (`data/documents/<content_sha256>`, raw Parquet by `email_uid`).
+   Added convention block to §0.5.
+5. **`users` concept** → rewrote §2.1. App-user, not email address.
+   Fields: `username UNIQUE`, `display_name`, `login_email` (recovery
+   only, not auth, not unique), `password_hash`, `totp_secret`. No
+   `email UNIQUE`. Auth details deferred to new `docs/AUTH-MODEL.md`.
 
-These are inline in `docs/EMAILS-BASE-MODEL.md`. Resolve next session.
+Also added `account_uid` FK to `emails` table (denormalized from
+`mailboxes.account_uid`) so partitioning and raw-Parquet joins are
+trivial without a 3-way join. Added matching index.
 
-1. **Filename key in `data/documents/`** — user asks whether to use
-   `content_sha256` (current) vs `uid` (UUIDv7) as the filename. Same
-   question for raw Parquet rows. Concerns: consistency with table
-   primary keys, and key efficiency (sha256 string vs UUIDv7 bigint).
-   *Action:* write a short comparison. Short answer: sha256 enables
-   cheap content-addressed dedup; uid is better if we want a single
-   canonical row per email regardless of content. Possibly both (uid
-   is the filename, sha256 is a dedup index). Propose & let user decide.
+Removed all `!!!` annotations; §14 checklist item marked done.
 
-2. **Raw Parquet primary key** — user proposes using `email_uid` as the
-   key of the Parquet row for easier joins. Currently we have both
-   (`email_uid` AND `raw_sha256`). *Action:* confirm `email_uid` is
-   the natural join key; keep `raw_sha256` as secondary for dedup /
-   integrity. Likely already covered but make it explicit in §4.2.
+### New doc
+`docs/AUTH-MODEL.md` — stub covering:
+- Core principle: login identity ≠ email address.
+- Proposed `users` fields (mirrors §2.1).
+- Flows: username+password (argon2id) → optional TOTP 2FA → recovery
+  via optional `login_email`.
+- Out-of-scope for v1 (OAuth, WebAuthn, org/role model).
+- Open questions (session storage, bootstrap, rate-limit, admin role).
 
-3. **`_to` suffix convention** (§0.4 / §0.5) — user wants `_to` added
-   as a sibling convention to `_by` (e.g. `assigned_to`,
-   `assigned_to_uid`). *Action:* add to the conventions table and to
-   §0.4 prose.
+### Current state
+- `app/` compiles; my changes clean under `svelte-check` (remaining
+  errors are pre-existing env/lucide issues).
+- Docs-only for the `docs/` changes.
 
-4. **`_ref` for internal files** (§0.5) — user prefers internal refs
-   point via `uid` (or sha256) into a known folder, not arbitrary
-   paths/URIs. *Action:* restrict `_ref` to external resources only
-   (S3 URL etc.); internal storage uses the convention
-   `<folder>/<uid-or-sha256>.<ext>`. Document this.
+### Next session — candidate threads
+1. Flesh out `docs/AUTH-MODEL.md`: pick session storage, first-run
+   bootstrap flow, argon2id params, admin role shape.
+2. Start `docs/SYNC-MODEL.md` (LMDB-backed; still empty).
+3. Start actually implementing the DuckDB schema from
+   `EMAILS-BASE-MODEL.md` (migration file / bootstrap code).
+4. Parquet shard rollover policy (open question §13.1).
+5. Pre-existing `app/` svelte-check env noise — worth cleaning.
 
-5. **`users` table concept** (§2.1) — user wants clarity on what a
-   "user" is: the App/server user, separate from email accounts. Also
-   raises auth question: username+password? OTP via email (chicken &
-   egg — can't receive OTP if not logged in)? TOTP / Authenticator?
-   *Action:* remove `email` UNIQUE from `users`, rename to something
-   like `login_email` or remove entirely. Propose a minimal auth
-   model: username + password (argon2) + optional TOTP. Not in this
-   doc's scope though — maybe just clarify and punt to a future
-   `docs/AUTH-MODEL.md`.
-
-### Key decisions made this session
-1. DuckDB = relational model only. No raw/binary BLOBs.
-2. LMDB = sync state + high-churn KV (separate subsystem, separate doc).
-3. `data/raw/` = append-only Parquet, partitioned by `account_uid` +
-   `yyyy-mm`, joined on `raw_sha256` via `read_parquet()`.
-4. `data/documents/` = content-addressed by `content_sha256`.
-   (**May change** per open thread #1.)
-
-### Next steps (prioritized)
-1. **Resolve the 5 open `!!!` threads** in `docs/EMAILS-BASE-MODEL.md`.
-2. **Finish the review** (user may add more comments).
-3. Fold approved table list into `docs/DATA-MODEL.md` §2.
-4. Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
-5. Decide Parquet shard/rollover policy.
-6. Implement migration runner under `server/` and land `001_init.sql`.
-7. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
-8. Add `svelte-check` to `bun run check`.
-
-### Key files changed this session
-- `docs/EMAIL-DATA.md` — created earlier + minor heading tidy.
-- `docs/EMAILS-BASE-MODEL.md` — **created**; then amended with storage
-  layout + Parquet + LMDB decisions; user added `!!!` review notes.
-- `DRAFT.md` — user rewrote with the raw-model task.
-- `Sin título.md` — created (empty) then deleted.
-- `TODO.md`, `MEMO.md`, `CHANGES.md` — bookkeeping.
+### Commits this session
+- `c49279a` app: fix Mails route, move router next to App, add Home page
+- (pending) docs: resolve EMAILS-BASE-MODEL review threads + add AUTH-MODEL stub
