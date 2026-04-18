@@ -73,3 +73,23 @@ None (fresh repo; everything is a creation in this session).
 - `e7fc4b6` - chore: initial bootstrap — P0-P2 skeletons, FP lib, RPC, Svelte 5 app
 
 ---
+
+# CHANGES.md - Session: Agent config + email data deferred
+
+## Date: 2026-04-18
+## Branch: main
+
+### Files Created
+1. **~/.pi/agent/AGENTS.md** — mandatory instructions for AI agents: session lifecycle (MEMO.md, CHANGES.md, LEARNINGS.md, TODO.md), rules (no Co-authored-by, no destructive commands, conventional commits, etc.), stack conventions, language. User further edited on their own (added Plans, Drafts sections).
+2. **DRAFT.md** — temp file with instructions for exhaustive email data analysis (deferred).
+
+### Files Modified
+- **MEMO.md** — updated with this session's context.
+- **CHANGES.md** — appended this entry.
+- **TODO.md** — added pending tasks.
+
+### Files Not Yet Created (deferred)
+- **docs/EMAIL-DATA.md** — exhaustive email field analysis with RFC references. Not started — user stopped the research as it was taking too long.
+
+### Commits
+None this session.
