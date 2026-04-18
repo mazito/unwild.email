@@ -1,36 +1,55 @@
 # MEMO — Session State
 
-## Last Session — 2026-04-18
+## Last Session — 2026-04-18 (cont.)
 
 ### Branch
 `main`
 
 ### Summary
-Short session focused on project config and beginning data model work.
+Resumed the deferred task from the previous session and completed it.
 
-1. Created `~/.pi/agent/AGENTS.md` with mandatory instructions for AI agents (session lifecycle, rules, conventions, etc.).
-2. User edited AGENTS.md further on their own (added Plans, Drafts sections; adjusted wording).
-3. Read `DRAFT.md` — user wants to start exhaustive analysis of email raw data fields (all extractable metadata from an email message) and write it into `docs/DATA-MODEL.md` under a "Raw email data" section. Also wants W3C standard references where applicable.
-4. User decided to move that analysis into its own file `docs/EMAIL-DATA.md` instead, but then **stopped the research** because it was taking too long.
-5. The DRAFT.md instruction to analyze email data is **deferred** — not yet started.
+1. Wrote `docs/EMAIL-DATA.md` — exhaustive catalog of every extractable
+   email field, with IETF/W3C references.
+2. Scope: IMAP4rev1/2 assumed; POP3 explicitly out of scope; JMAP noted as
+   future-compatible so the data model stays provider-agnostic.
+3. Structure covers: transport metadata (IMAP), SMTP envelope residue,
+   RFC 5322 headers, MIME + multipart semantics, body extraction (HTML /
+   plain-text), attachments, authentication (SPF/DKIM/DMARC/ARC/BIMI),
+   mailing lists, delivery reports (DSN/MDN/ARF), S/MIME & PGP, i18n
+   (EAI, SMTPUTF8, IDN), calendar (iMIP), priority/importance,
+   vendor/X-* headers, derived/computed fields, a v0 persistence
+   recommendation, and a consolidated deprecated/ignore list.
+4. Legend used: 🟢 Core / 🟡 Useful / 🔵 Niche / ⚫ Deprecated / 🧮 Derived.
+5. `DRAFT.md` instruction is now satisfied — safe to clear/reuse.
 
 ### Current state — what works
-(Same as previous session — no code changes this session.)
+(No code changes this session — docs only.)
 - `bun run check` → lint + typecheck + 14/14 tests green.
 - `bun run dev:server` → Bun HTTP on `:3030`.
 - `bun run dev:app` → Vite on `:5173`.
 
 ### Key decisions
-1. Email raw data analysis will live in `docs/EMAIL-DATA.md` (separate from DATA-MODEL.md).
-2. W3C/RFC references should be cited for each field that comes from a standard.
+1. POP3 is **out of scope** for the sync pipeline (no folders, no per-message
+   flags). Document explicitly says so.
+2. Always persist the **raw RFC 5322 blob + SHA-256** alongside the parsed
+   tree — required for DKIM re-verification and forensic features. Retention
+   policy is an open question (§19).
+3. Provider-native IDs (`X-GM-MSGID`, Graph id) to be captured as
+   **additional metadata** next to `Message-ID`, not as primary key.
+4. `Authentication-Results` is the preferred source for auth verdicts over
+   raw per-method headers — but only entries matching our configured
+   boundary MTA's `authserv-id` should be trusted.
 
 ### Next steps
-1. **Email data analysis** — create `docs/EMAIL-DATA.md` with exhaustive list of all extractable email fields, referencing RFCs (RFC 5322, RFC 2045, RFC 2369, etc.). This is the main pending task.
-2. Continue through `docs/DATA-MODEL.md` §7 checklist to unblock P3.
+1. **Review `docs/EMAIL-DATA.md` with user** — confirm priority buckets,
+   resolve §19 open questions, pick which derived fields (§16) are v0.
+2. **Fold findings back into `docs/DATA-MODEL.md`** — §2 `Email` core field
+   list, §7 checklist items (header storage strategy, attachment storage,
+   Document↔Attachment version key now has more context from §7 of EMAIL-DATA).
 3. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
 4. Add `svelte-check` to `bun run check` pipeline.
 5. Polish app shell.
 
 ### Key files changed this session
-- `~/.pi/agent/AGENTS.md` — created with agent instructions (symlinked from repo root).
-- `DRAFT.md` — user wrote instructions for email data analysis (temporary).
+- `docs/EMAIL-DATA.md` — **created** (~380 lines, 25.7 KB).
+- `TODO.md`, `MEMO.md`, `CHANGES.md` — bookkeeping updates.

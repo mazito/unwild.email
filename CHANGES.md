@@ -1,5 +1,34 @@
 # CHANGES.md - Session: Project bootstrap (P0–P2) + theming
 
+## Date: 2026-04-18 (session 2)
+## Branch: main
+
+### Files Created
+- **docs/EMAIL-DATA.md** — exhaustive catalog of extractable email fields
+  with IETF/W3C references. Sections: scope & assumptions, message anatomy,
+  IMAP transport metadata, SMTP envelope residue, RFC 5322 headers, MIME
+  headers + types + multipart semantics + encodings, body extraction
+  (HTML/plain), attachments, auth (SPF/DKIM/DMARC/ARC/BIMI), mailing lists,
+  delivery reports (DSN/MDN/ARF), S/MIME & PGP, i18n (EAI/SMTPUTF8/IDN),
+  calendar (iMIP), importance/priority, vendor X-* headers, derived fields,
+  v0 persistence recommendation, deprecated/ignore list, open questions.
+  Legend: 🟢 Core / 🟡 Useful / 🔵 Niche / ⚫ Deprecated / 🧮 Derived.
+
+### Files Modified
+- **TODO.md** — marked EMAIL-DATA.md task done; added review + fold-back
+  tasks.
+- **MEMO.md** — updated session state for 2026-04-18 (cont.).
+
+### Decisions
+- POP3 explicitly out of scope (no folders / no flags model).
+- Always persist raw RFC 5322 blob + SHA-256 for DKIM re-verification and
+  forensics; retention policy TBD.
+- Provider-native IDs (`X-GM-MSGID`, Graph id) = metadata, not primary key.
+- Trust only `Authentication-Results` entries matching a configured
+  `authserv-id`.
+
+---
+
 ## Date: 2026-04-17
 ## Branch: main
 
