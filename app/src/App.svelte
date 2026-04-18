@@ -1,12 +1,13 @@
 <script lang="ts">
   import Header from './components/Header.svelte'
   import Sidebar from './components/Sidebar.svelte'
-  import { route } from './lib/router.svelte.ts'
+  import { route } from './router.svelte.ts'
   import Admin from './pages/Admin.svelte'
   import Compose from './pages/Compose.svelte'
   import Contacts from './pages/Contacts.svelte'
   import Documents from './pages/Documents.svelte'
   import Home from './pages/Home.svelte'
+  import Mails from './pages/Mails.svelte'
   import Monitor from './pages/Monitor.svelte'
   import NotFound from './pages/NotFound.svelte'
   import Profile from './pages/Profile.svelte'
@@ -27,6 +28,8 @@
     <main class="flex-1 overflow-auto p-4 md:p-6">
       {#if route.current.tag === 'home'}
         <Home />
+      {:else if route.current.tag === 'mails'}
+        <Mails />
       {:else if route.current.tag === 'compose'}
         <Compose />
       {:else if route.current.tag === 'contacts'}

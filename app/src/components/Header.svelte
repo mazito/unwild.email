@@ -1,7 +1,7 @@
 <script lang="ts">
   import { LogOut, Menu, MessageCircleQuestionMark, Plus, Search, UserCog, MailPlus, Sparkles } from 'lucide-svelte'
   import { avatarSVG } from '../lib/avatar.ts'
-  import { hrefFor } from '../lib/router.ts'
+  import { hrefFor } from '../router.svelte.ts'
 
   interface Props {
     userAlias?: string
@@ -37,20 +37,20 @@
         />
       </div>
 
-      <div class="dropdown dropdown-end">
-        <a
-          href={hrefFor('compose')}
-          class={
-            "h-10 w-12 flex items-center justify-center rounded-md bg-white border border-gray-300"+
-            " hover:bg-gray-300"
-          }
-          aria-label="New ..."
-          title="New ..."
-          tabindex="0"
-          role="button"
-          >
-          <Plus class="size-6 text-gray-600" />
-        </a>
+      <a
+        href={hrefFor('compose')}
+        class={
+          "h-10 w-12 flex items-center justify-center rounded-md bg-white border border-gray-300"+
+          " hover:bg-gray-300"
+        }
+        aria-label="Compose email ..."
+        title="Compose email ..."
+        tabindex="0"
+        role="button"
+        >
+        <MailPlus class="size-6 text-gray-600" />
+      </a>
+      <!-- <div class="dropdown dropdown-end">
         <ul class="menu menu-md dropdown-content bg-base-100 rounded-box z-50 mt-3 w-42 p-1 shadow border border-base-300 pb-2">
           <li class="">
             <a href={hrefFor('profile')}>
@@ -72,7 +72,7 @@
             </a>
           </li>
         </ul>
-      </div>
+      </div> -->
   </div>
 
   <div class="flex items-center justify-end">

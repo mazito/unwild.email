@@ -1,45 +1,37 @@
 <script lang="ts">
-  import { rpcGet } from '../lib/rpc-client.effects.ts'
-
-  let status = $state<'idle' | 'pinging' | 'ok' | 'err'>('idle')
-  let payload = $state<unknown>(null)
-  let errMsg = $state('')
-
-  async function ping() {
-    status = 'pinging'
-    const r = await rpcGet<{ pong: true; ts: number }>('ping')
-    if (r.ok) {
-      status = 'ok'
-      payload = r.value
-    } else {
-      status = 'err'
-      errMsg = r.error.message
-    }
-  }
+  import { hrefFor } from '../router.svelte.ts'
 </script>
 
-<div class="space-y-4 max-w-3xl">
-  <div>
-    <h1 class="text-2xl font-semibold">Home</h1>
-    <p class="text-base-content/60">Grouped email view placeholder.</p>
-  </div>
+<section class="max-w-3xl">
+  <h1 class="text-2xl font-bold mb-2">Welcome to unwild.email</h1>
+  <p class="text-gray-600 mb-6">
+    Your local-first, entity-first email engine. Pick where to go:
+  </p>
 
-  <div class="card bg-base-100 shadow-sm">
-    <div class="card-body">
-      <h2 class="card-title text-base">RPC smoke test</h2>
-      <div class="flex items-center gap-2">
-        <button type="button" class="btn btn-primary btn-sm" onclick={ping}>Ping server</button>
-        {#if status === 'pinging'}
-          <span class="loading loading-dots loading-sm"></span>
-        {/if}
-      </div>
-      {#if status === 'ok'}
-        <div class="mockup-code text-xs mt-2"><pre><code>{JSON.stringify(payload, null, 2)}</code></pre></div>
-      {:else if status === 'err'}
-        <div class="alert alert-error alert-sm mt-2">
-          <span>{errMsg}</span>
-        </div>
-      {/if}
-    </div>
-  </div>
-</div>
+  <ul class="grid gap-3 sm:grid-cols-2">
+    <li>
+      <a href={hrefFor('mails')} class="block border rounded-lg p-4 hover:bg-gray-50">
+        <div class="font-semibold">Mails</div>
+        <div class="text-sm text-gray-500">Browse your messages.</div>
+      </a>
+    </li>
+    <li>
+      <a href={hrefFor('contacts')} class="block border rounded-lg p-4 hover:bg-gray-50">
+        <div class="font-semibold">Persons &amp; Orgs</div>
+        <div class="text-sm text-gray-500">People and organizations.</div>
+      </a>
+    </li>
+    <li>
+      <a href={hrefFor('documents')} class="block border rounded-lg p-4 hover:bg-gray-50">
+        <div class="font-semibold">Documents &amp; Files</div>
+        <div class="text-sm text-gray-500">Attachments and files.</div>
+      </a>
+    </li>
+    <li>
+      <a href={hrefFor('admin')} class="block border rounded-lg p-4 hover:bg-gray-50">
+        <div class="font-semibold">Administration</div>
+        <div class="text-sm text-gray-500">Accounts and settings.</div>
+      </a>
+    </li>
+  </ul>
+</section>
