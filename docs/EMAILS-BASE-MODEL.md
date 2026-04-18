@@ -13,6 +13,84 @@ DB: **DuckDB** (≥ 1.3 for native `uuidv7()`). SQL dialect below is DuckDB.
 
 ---
 
+## Scope & storage layout
+
+### What's in, what's out
+
+**In scope:** the relational model of *the email itself* — the long-lived,
+queryable, analytical state of every ingested message.
+
+**Out of scope (explicitly):**
+
+- **Sync state** (IMAP cursors, UIDVALIDITY watermarks, MODSEQ progress,
+  retry counters, backoff, error logs). Sync is a separate subsystem and
+  will get its own doc (`docs/SYNC-MODEL.md`). Its working state lives in
+  **LMDB**, not in DuckDB — it's high-churn, small-key, and doesn't need
+  analytical queries. Long-term sync *history* (if we ever want it) can be
+  periodically flushed into DuckDB, but that's a future decision.
+- **Raw RFC 5322 bytes.** Not stored in DuckDB tables. See below.
+- **Attachment file bytes.** Not stored in DuckDB tables. See below.
+
+### Server on-disk layout
+
+The server root has a `data/` directory with three sibling stores, each
+playing a distinct role:
+
+```
+server/
+  data/
+    duckdb/              # single DuckDB file (or shards) — the relational model in this doc
+      unwild.duckdb
+    lmdb/                # LMDB environment — sync cursors, job queues, ephemeral KV
+      data.mdb
+      lock.mdb
+    raw/                 # append-only Parquet shards of raw RFC 5322 bytes
+      account=<uid>/
+        yyyy-mm=<YYYY-MM>/
+          <shard>.parquet
+    documents/           # content-addressed attachment / binary-part store
+      <sha256[0:2]>/<sha256>
+```
+
+**Rules of the road:**
+
+1. **DuckDB** holds the relational model defined in this doc. No BLOBs of
+   raw email or attachment bytes. Keep it lean so analytical scans stay fast.
+2. **LMDB** holds sync state and any high-churn KV / job queue. Nothing in
+   this doc touches it.
+3. **`raw/`** is append-only Parquet. Each file is a shard of raw RFC 5322
+   envelopes, partitioned by `account_uid` and month of
+   `internal_date_utc`. Columns (minimum): `email_uid UUID`, `raw_sha256
+   TEXT`, `size_bytes BIGINT`, `bytes BLOB`, `ingested_utc TIMESTAMP`.
+   - Append-only → no in-place updates, cheap compaction by file rewrite.
+   - Queryable from DuckDB via `read_parquet('data/raw/**/*.parquet',
+     hive_partitioning=TRUE)` when we need to re-verify DKIM, export,
+     reprocess, etc.
+   - Retention = per-file (drop a partition to drop a month).
+4. **`documents/`** is a content-addressed store for attachments and any
+   binary MIME leaf worth keeping (inline images, etc.). The file name
+   **is** the `content_sha256`. No directory index needed — DuckDB rows
+   carry the sha256 and the path is a pure function of it.
+5. **No inline `BLOB` columns** in DuckDB for either raw messages or
+   attachment bodies. If we ever need to co-locate a few small inline
+   binaries for speed, we'll revisit; for now the rule is simple and the
+   DB stays analytical.
+
+### Implications for this model
+
+- There is **no `raw_messages` table** and **no `sync_checkpoints` table**
+  in this doc. Both are listed under "Removed by design" in
+  `docs/EMAILS-BASE-MODEL.md` history.
+- `emails.raw_sha256` is the only pointer we need to the Parquet shard
+  (partition columns narrow down the file set; `raw_sha256` picks the row).
+- `attachments.content_sha256` is the only pointer we need to
+  `documents/<sha256[0:2]>/<sha256>`. No `storage_ref` column.
+- `mime_parts` keeps `body_text` inline for text parts. Binary parts keep
+  only metadata + `content_sha256`; the bytes live in `documents/` (if
+  they're worth keeping) or aren't kept at all (ephemeral inline).
+
+---
+
 ## 0. Naming & schema conventions
 
 These conventions apply to **every table** in this model (and should be
@@ -144,17 +222,18 @@ Diagram (textual):
 users ──< accounts ──< mailboxes ──< emails ──┬──< email_headers
                                               ├──< email_addresses >── addresses
                                               ├──< mime_parts (self-ref tree)
-                                              │       └──< attachments
+                                              │       ├──< attachments     → documents/<sha256>
                                               │       └──< calendar_invites
                                               ├──< received_hops
                                               ├──< auth_results
                                               ├──< dkim_signatures
                                               ├──< list_metadata  (0..1)
                                               ├──< thread_references
-                                              ├──< email_keywords >── keywords
-                                              └──1 raw_messages
+                                              └──< email_keywords >── keywords
 threads ──< emails (via thread_uid)
-mailboxes ──1 sync_checkpoints
+
+   emails.raw_sha256 ─→ data/raw/account=…/yyyy-mm=…/*.parquet  (append-only)
+   sync state        ─→ data/lmdb/  (separate subsystem; see SYNC-MODEL.md)
 ```
 
 A few design decisions worth flagging:
@@ -172,9 +251,15 @@ A few design decisions worth flagging:
    mail from x@y" queries without scanning the header blob.
 4. **MIME tree is stored as a self-referencing adjacency list** with a
    dotted `part_path` ("1.2.3") for quick lookup without recursion.
-5. **Raw RFC 5322 bytes** live in `raw_messages` — either inline `BLOB` or
-   external reference (`body_blob_ref`). Retention policy TBD (see DATA-MODEL
-   §19 open questions).
+5. **Raw RFC 5322 bytes** do NOT live in DuckDB. They are written to
+   append-only Parquet shards under `data/raw/account=<uid>/yyyy-mm=<YYYY-MM>/`
+   and joined on `emails.raw_sha256` when needed (DKIM re-verification,
+   export, re-parse). Keeps DuckDB analytical and makes retention a
+   file-drop.
+6. **Sync state is out of scope.** No tables here hold IMAP cursors,
+   UIDVALIDITY watermarks, MODSEQ progress, retry counters, etc. Those
+   live in LMDB under `data/lmdb/` and will be modeled in
+   `docs/SYNC-MODEL.md`.
 
 ---
 
@@ -255,29 +340,16 @@ CREATE TABLE mailboxes (
 );
 ```
 
-### 3.2 `sync_checkpoints`
+### 3.2 Sync state — _out of scope here_
 
-Per-mailbox sync progress. Separate from `mailboxes` to keep the folder
-record "clean" and to allow keeping a short history if we later want to
-audit sync drift.
+Per-mailbox sync progress (last seen UID, MODSEQ, status, backoff, errors)
+is **not** part of this model. It's high-churn, small-key, and doesn't
+benefit from analytical queries. It will live in **LMDB** under
+`data/lmdb/` and be defined in `docs/SYNC-MODEL.md`.
 
-```sql
-CREATE TABLE sync_checkpoints (
-    uid                  UUID        PRIMARY KEY DEFAULT uuidv7(),
-    mailbox_uid          UUID        NOT NULL REFERENCES mailboxes(uid),
-    last_uid_seen        BIGINT,
-    last_modseq_seen     BIGINT,
-    last_sync_utc        TIMESTAMP,
-    status_kind          TEXT        NOT NULL DEFAULT 'idle'
-                                     CHECK (status_kind IN
-                                     ('idle','syncing','success','error')),
-    error_message        TEXT,
-    created_utc          TIMESTAMP   NOT NULL DEFAULT current_timestamp,
-    updated_utc          TIMESTAMP,
-    deleted_utc          TIMESTAMP,
-    UNIQUE (mailbox_uid)
-);
-```
+`mailboxes` stays the relational anchor (path, special-use, counters). When
+the sync subsystem needs to remember "where I left off for mailbox X", it
+does so in LMDB keyed by `mailbox_uid` — no DuckDB rows involved.
 
 ---
 
@@ -362,24 +434,38 @@ CREATE INDEX emails_thread_idx            ON emails (thread_uid);
 > fast filtering and list rendering. Kept in sync by the ingest pipeline;
 > source of truth is `email_addresses`.
 
-### 4.2 `raw_messages`
+### 4.2 Raw RFC 5322 bytes — _stored as Parquet, not in DuckDB_
 
-Raw RFC 5322 bytes. Kept in a separate table to avoid bloating `emails`
-scans; can be moved to external storage without touching the core model.
+Raw message bytes live in an append-only Parquet tree under
+`data/raw/account=<account_uid>/yyyy-mm=<YYYY-MM>/*.parquet`. Each shard
+is a flat table with at minimum:
+
+| Column | Type | Notes |
+|---|---|---|
+| `email_uid` | UUID | Matches `emails.uid`. |
+| `raw_sha256` | TEXT | Matches `emails.raw_sha256`. |
+| `size_bytes` | BIGINT | Raw message size. |
+| `bytes` | BLOB | The raw RFC 5322 envelope. |
+| `ingested_utc` | TIMESTAMP | When we wrote this shard row. |
+
+Queryable from DuckDB when needed:
 
 ```sql
-CREATE TABLE raw_messages (
-    uid                  UUID        PRIMARY KEY DEFAULT uuidv7(),
-    email_uid            UUID        NOT NULL REFERENCES emails(uid),
-    size_bytes           BIGINT      NOT NULL,
-    sha256               TEXT        NOT NULL,
-    bytes_blob           BLOB,                               -- inline; NULL if externalized
-    storage_ref          TEXT,                               -- external object-store URI
-    created_utc          TIMESTAMP   NOT NULL DEFAULT current_timestamp,
-    UNIQUE (email_uid),
-    CHECK ((bytes_blob IS NOT NULL) OR (storage_ref IS NOT NULL))
-);
+-- Fetch the raw bytes for a given message
+SELECT r.bytes
+FROM read_parquet('data/raw/**/*.parquet', hive_partitioning = TRUE) r
+JOIN emails e ON e.raw_sha256 = r.raw_sha256
+WHERE e.uid = ?;
 ```
+
+Rationale:
+- Append-only → safe for concurrent writers, cheap compaction.
+- Partitioned → predicate pushdown narrows files read.
+- Keeps DuckDB file small and scans fast for the relational model.
+- Retention = drop a partition directory.
+
+**No `raw_messages` table exists in DuckDB.** `emails.raw_sha256` is the
+pointer.
 
 ---
 
@@ -487,10 +573,8 @@ CREATE TABLE mime_parts (
     content_description  TEXT,
     content_language     TEXT,
     size_bytes           BIGINT      NOT NULL,                       -- decoded size
-    content_sha256       TEXT,                                       -- over decoded bytes
-    body_text            TEXT,                                       -- decoded text (NULL for binary)
-    body_blob            BLOB,                                       -- inline bytes (small parts)
-    body_blob_ref        TEXT,                                       -- external storage URI
+    content_sha256       TEXT,                                       -- over decoded bytes; also the key under data/documents/
+    body_text            TEXT,                                       -- decoded text (NULL for binary parts)
     params_json          JSON,                                       -- remaining Content-Type / Disposition params
     is_leaf              BOOLEAN     NOT NULL,
     is_attachment        BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -522,7 +606,7 @@ CREATE TABLE attachments (
     content_sha256       TEXT        NOT NULL,
     is_inline            BOOLEAN     NOT NULL DEFAULT FALSE,
     content_id           TEXT,                                       -- for cid: references
-    storage_ref          TEXT,                                       -- external store URI
+                                                                     -- file lives at data/documents/<sha256[0:2]>/<sha256>
     created_utc          TIMESTAMP   NOT NULL DEFAULT current_timestamp,
     deleted_utc          TIMESTAMP,
     UNIQUE (mime_part_uid)
@@ -809,30 +893,38 @@ HAVING COUNT(*) > 1;
 
 ## 13. Open questions / TBD
 
-1. **Raw blob retention.** Keep forever vs tiered (DuckDB → object store →
-   cold storage)? DKIM re-verification requires raw bytes.
-2. **`content_sha256` representation** — lower-case hex `TEXT` (portable,
-   easy to log) vs `BLOB` (half the size). Leaning text for now.
-3. **Threading scope** — per-account (current) vs global across all of a
+1. **Parquet shard size / rollover policy** for `data/raw/`. One file per
+   month per account? Size cap (e.g. 128 MB)? Compaction cadence?
+2. **Parquet schema evolution** — if we later add columns to the raw
+   shards (e.g. `source_ip`), DuckDB handles schema union across files,
+   but we should document the allowed evolution rules.
+3. **`content_sha256` representation** — lower-case hex `TEXT` (portable,
+   easy to log) vs `BLOB` (half the size). Leaning text for now. Affects
+   both DuckDB columns and `data/documents/` directory naming.
+4. **Threading scope** — per-account (current) vs global across all of a
    user's accounts? Message-ID is supposed to be global, so global might
    make sense; per-account is simpler and sidesteps cross-account leaks.
-4. **Addresses normalization** — preserve canonical `local@domain`
+5. **Addresses normalization** — preserve canonical `local@domain`
    lower-cased; do Gmail dot-folding / plus-tag stripping only at
    *match time*, not at store time. Confirm.
-5. **Keywords scope** — per-account (current) vs per-user? If a user has
+6. **Keywords scope** — per-account (current) vs per-user? If a user has
    two Gmail accounts with a "Work" label in both, should they merge?
-6. **`email_flags` as a table?** Current design keeps IMAP system flags as
+7. **`email_flags` as a table?** Current design keeps IMAP system flags as
    booleans on `emails` (small, closed set). Is there value in a
    normalized `email_flags` table for history (who marked it read, when)?
-7. **Soft-delete vs hard-delete** on `emails` re-ingest. Proposal:
-   soft-delete old row + insert new; keep `raw_messages` linked to the
-   live row only.
-8. **Indexing strategy beyond PK/UNIQUE.** DuckDB's zone maps cover a lot;
+8. **Soft-delete vs hard-delete** on `emails` re-ingest. Proposal:
+   soft-delete old row + insert new; the Parquet raw row for the old one
+   stays (content-addressed by `raw_sha256`) — no cleanup needed.
+9. **Indexing strategy beyond PK/UNIQUE.** DuckDB's zone maps cover a lot;
    benchmark before adding more `CREATE INDEX`es.
-9. **Partitioning.** Do we partition `emails` by `account_uid` or by month
-   of `internal_date_utc` for scanning perf?
-10. **Cross-account dedup.** Same message forwarded to two accounts —
-    two `emails` rows, same `raw_sha256`. Acceptable for v0.
+10. **DuckDB partitioning.** Do we partition `emails` by `account_uid` or
+    by month of `internal_date_utc` for scanning perf?
+11. **Cross-account dedup.** Same message forwarded to two accounts —
+    two `emails` rows, same `raw_sha256` — and one shared Parquet row (or
+    two, depending on write path). Acceptable for v0.
+12. **`data/documents/` eviction.** If a user deletes an email, do we GC
+    its attachments? Content-addressed layout means other messages may
+    still reference the same file (ref-count needed, or lazy sweep).
 
 ---
 
@@ -841,8 +933,8 @@ HAVING COUNT(*) > 1;
 - [ ] Review this doc (`!!!` annotations).
 - [ ] Fold the table list into `docs/DATA-MODEL.md` §2 (replacing the
       placeholder for `Email`, `Thread`, `Attachment`, `Account`).
-- [ ] Decide storage backend for raw blobs (`raw_messages.bytes_blob` vs
-      external).
+- [ ] Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
+- [ ] Decide Parquet shard/rollover policy for `data/raw/`.
 - [ ] Implement a migration runner under `server/` and land `001_init.sql`
       with these tables.
 - [ ] Define the parser's output shape (TS types) mirroring these tables 1:1
