@@ -1,99 +1,69 @@
 # MEMO — Session State
 
-## Last Session — 2026-04-18 (session 2, cont.)
+## Last Session — 2026-04-19
 
 ### Branch
 `main`
 
 ### Summary
-Docs-only session. Built the raw-email relational model and iterated on
-storage decisions with the user. User is still reviewing and leaving
-`!!!` comments inline in `docs/EMAILS-BASE-MODEL.md`.
+Docs-only follow-up session focused on resolving the user's review notes in
+`docs/EMAILS-BASE-MODEL.md`.
 
-1. Wrote `docs/EMAIL-DATA.md` (earlier in the day).
-2. Wrote `docs/EMAILS-BASE-MODEL.md` — DuckDB relational model, 18
-   tables, conventions block at top, sample queries, open questions.
-3. Folded three design decisions into the model:
-   - Server on-disk layout `data/{duckdb,lmdb,raw,documents}`.
-   - Sync state is **out of scope** for the emails model — moved to a
-     future `docs/SYNC-MODEL.md` (LMDB-backed). Removed
-     `sync_checkpoints` table.
-   - Raw RFC 5322 bytes → append-only Parquet shards (partitioned by
-     `account_uid` + `yyyy-mm`). Removed `raw_messages` table. Also
-     removed `body_blob`/`body_blob_ref` from `mime_parts` and
-     `storage_ref` from `attachments` — `content_sha256` is the sole
-     pointer into `data/documents/`.
-4. User started reviewing with `!!!` annotations — **session closed
-   before the review finished**.
+1. Folded the review comments into the doc and removed the inline `!!!`
+   blocks.
+2. Clarified the storage-key split:
+   - `data/documents/` stays content-addressed by `content_sha256`.
+   - raw Parquet rows are joined by `email_uid`, with `raw_sha256` kept as
+     the integrity / dedup fingerprint.
+3. Added `_to` / `_to_uid` to the schema conventions and restricted `_ref`
+   to external references only.
+4. Clarified that `users` are app/server principals, not mailbox
+   identities; replaced `users.email` with `login_name` + optional
+   `contact_email`, and deferred auth details to a future
+   `docs/AUTH-MODEL.md`.
+5. Cleaned a few stale references from the previous draft
+   (`sync_checkpoints` in mutable tables, old raw-storage wording, next-step
+   note about `!!!` annotations).
 
 ### Current state — what works
 Docs only; no code changes.
-- `bun run check` → lint + typecheck + 14/14 tests green.
-- `bun run dev:server` → Bun HTTP on `:3030`.
-- `bun run dev:app` → Vite on `:5173`.
+- `docs/EMAILS-BASE-MODEL.md` no longer contains unresolved `!!!` review
+  markers.
+- The raw-email model now consistently treats `email_uid` as the direct join
+  key into Parquet.
 
-### Open `!!!` review threads (unresolved)
+### What is done
+1. Resolved the five review threads captured in the previous memo.
+2. Kept `data/documents/` on `content_sha256` and documented why that is a
+   blob-store key, not a relational key.
+3. Updated the raw-bytes section, sample query, and open questions so they
+   align with `email_uid`-based joins.
+4. Updated the conventions and `users` section to match the user's review.
 
-These are inline in `docs/EMAILS-BASE-MODEL.md`. Resolve next session.
+### Pending / next steps
+1. Continue the review in case the user adds more comments.
+2. Fold the approved email tables into `docs/DATA-MODEL.md` §2.
+3. Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
+4. Decide Parquet shard/rollover policy.
+5. Implement migration runner under `server/` and land `001_init.sql`.
+6. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
+7. Add `svelte-check` to `bun run check`.
 
-1. **Filename key in `data/documents/`** — user asks whether to use
-   `content_sha256` (current) vs `uid` (UUIDv7) as the filename. Same
-   question for raw Parquet rows. Concerns: consistency with table
-   primary keys, and key efficiency (sha256 string vs UUIDv7 bigint).
-   *Action:* write a short comparison. Short answer: sha256 enables
-   cheap content-addressed dedup; uid is better if we want a single
-   canonical row per email regardless of content. Possibly both (uid
-   is the filename, sha256 is a dedup index). Propose & let user decide.
+### Blockers / open questions
+1. No blocker for the docs pass.
+2. Still open at model level: Parquet shard policy, `content_sha256` text vs
+   blob representation, threading scope, keyword scope, attachment GC.
 
-2. **Raw Parquet primary key** — user proposes using `email_uid` as the
-   key of the Parquet row for easier joins. Currently we have both
-   (`email_uid` AND `raw_sha256`). *Action:* confirm `email_uid` is
-   the natural join key; keep `raw_sha256` as secondary for dedup /
-   integrity. Likely already covered but make it explicit in §4.2.
-
-3. **`_to` suffix convention** (§0.4 / §0.5) — user wants `_to` added
-   as a sibling convention to `_by` (e.g. `assigned_to`,
-   `assigned_to_uid`). *Action:* add to the conventions table and to
-   §0.4 prose.
-
-4. **`_ref` for internal files** (§0.5) — user prefers internal refs
-   point via `uid` (or sha256) into a known folder, not arbitrary
-   paths/URIs. *Action:* restrict `_ref` to external resources only
-   (S3 URL etc.); internal storage uses the convention
-   `<folder>/<uid-or-sha256>.<ext>`. Document this.
-
-5. **`users` table concept** (§2.1) — user wants clarity on what a
-   "user" is: the App/server user, separate from email accounts. Also
-   raises auth question: username+password? OTP via email (chicken &
-   egg — can't receive OTP if not logged in)? TOTP / Authenticator?
-   *Action:* remove `email` UNIQUE from `users`, rename to something
-   like `login_email` or remove entirely. Propose a minimal auth
-   model: username + password (argon2) + optional TOTP. Not in this
-   doc's scope though — maybe just clarify and punt to a future
-   `docs/AUTH-MODEL.md`.
-
-### Key decisions made this session
-1. DuckDB = relational model only. No raw/binary BLOBs.
-2. LMDB = sync state + high-churn KV (separate subsystem, separate doc).
-3. `data/raw/` = append-only Parquet, partitioned by `account_uid` +
-   `yyyy-mm`, joined on `raw_sha256` via `read_parquet()`.
-4. `data/documents/` = content-addressed by `content_sha256`.
-   (**May change** per open thread #1.)
-
-### Next steps (prioritized)
-1. **Resolve the 5 open `!!!` threads** in `docs/EMAILS-BASE-MODEL.md`.
-2. **Finish the review** (user may add more comments).
-3. Fold approved table list into `docs/DATA-MODEL.md` §2.
-4. Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
-5. Decide Parquet shard/rollover policy.
-6. Implement migration runner under `server/` and land `001_init.sql`.
-7. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
-8. Add `svelte-check` to `bun run check`.
+### Important decisions made and why
+1. Keep `content_sha256` as the on-disk key in `data/documents/` because it
+   gives content-addressed dedup and a path that is a pure function of the
+   bytes.
+2. Treat `email_uid` as the logical raw-row key because it makes joins from
+   DuckDB straightforward, while `raw_sha256` still covers integrity and
+   duplicate-payload analysis.
+3. Keep authentication modeling out of the email schema doc to avoid mixing
+   mailbox persistence concerns with app-auth design.
 
 ### Key files changed this session
-- `docs/EMAIL-DATA.md` — created earlier + minor heading tidy.
-- `docs/EMAILS-BASE-MODEL.md` — **created**; then amended with storage
-  layout + Parquet + LMDB decisions; user added `!!!` review notes.
-- `DRAFT.md` — user rewrote with the raw-model task.
-- `Sin título.md` — created (empty) then deleted.
-- `TODO.md`, `MEMO.md`, `CHANGES.md` — bookkeeping.
+- `docs/EMAILS-BASE-MODEL.md` — review comments resolved and prose cleaned.
+- `MEMO.md`, `TODO.md`, `CHANGES.md` — session bookkeeping.

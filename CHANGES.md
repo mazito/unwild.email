@@ -1,5 +1,32 @@
 # CHANGES.md - Session: Project bootstrap (P0–P2) + theming
 
+## Date: 2026-04-19
+## Branch: main
+
+### Files Modified
+- **docs/EMAILS-BASE-MODEL.md** — resolved the outstanding review pass:
+  clarified `data/documents/` stays content-addressed by
+  `content_sha256`; raw Parquet rows are joined by `email_uid` with
+  `raw_sha256` kept as integrity/dedup fingerprint; added `_to` /
+  `_to_uid`; restricted `_ref` to external references; clarified `users`
+  as app/server principals with `login_name` + optional `contact_email`;
+  removed stale review comments and stale wording from open questions /
+  next steps.
+- **MEMO.md** — refreshed session state after resolving the doc review.
+- **TODO.md** — updated the pending review item to reflect the latest pass.
+- **CHANGES.md** — appended this entry.
+
+### Decisions
+- Keep `content_sha256` as the blob-store key under `data/documents/`.
+- Treat `email_uid` as the logical join key for raw Parquet rows.
+- Defer auth modeling to a future `docs/AUTH-MODEL.md` instead of mixing
+  it into the email persistence doc.
+
+### Commits
+None this session.
+
+---
+
 ## Date: 2026-04-18 (session 2)
 ## Branch: main
 

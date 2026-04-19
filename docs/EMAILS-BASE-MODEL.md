@@ -64,6 +64,9 @@ server/
    envelopes, partitioned by `account_uid` and month of
    `internal_date_utc`. Columns (minimum): `email_uid UUID`, `raw_sha256
    TEXT`, `size_bytes BIGINT`, `bytes BLOB`, `ingested_utc TIMESTAMP`.
+   Logically, each Parquet row belongs to one `emails.uid`; `email_uid` is
+   the natural join key back into DuckDB, while `raw_sha256` stays as the
+   content fingerprint for integrity checks and future dedup analysis.
    - Append-only → no in-place updates, cheap compaction by file rewrite.
    - Queryable from DuckDB via `read_parquet('data/raw/**/*.parquet',
      hive_partitioning=TRUE)` when we need to re-verify DKIM, export,
@@ -72,10 +75,13 @@ server/
 
 4. **`documents/`** is a content-addressed store for attachments and any
    binary MIME leaf worth keeping (inline images, etc.). The file name
-   **is** the `content_sha256`. No directory index needed — DuckDB rows
-   carry the sha256 and the path is a pure function of it.
-
-   > !!! seems ok, only i have a question. Using the content hash as the filename is quite usual and good in general. Only asking if using the document uid (v7) would not be better and consistent with the table keys and uids. Not big deal really, just considering alts. . Not sure if sha256 hashes are more efficient as keys that UUID v7 (which is finally a bigint).
+   **is** the `content_sha256`. We intentionally separate the relational key
+   from the blob-store key here: `uid` is best for rows and joins, while
+   `content_sha256` is best for file storage because identical bytes collapse
+   to one object, integrity is self-checking, and the path is a pure
+   function of the bytes. If we later promote a semantic `documents` row in
+   `docs/DATA-MODEL.md`, that row can still have its own UUIDv7 while
+   pointing at the same `content_sha256` object.
 
 5. **No inline `BLOB` columns** in DuckDB for either raw messages or
    attachment bodies. If we ever need to co-locate a few small inline
@@ -87,15 +93,14 @@ server/
 - There is **no `raw_messages` table** and **no `sync_checkpoints` table**
   in this doc. Both are listed under "Removed by design" in
   `docs/EMAILS-BASE-MODEL.md` history.
-- `emails.raw_sha256` is the only pointer we need to the Parquet shard
-  (partition columns narrow down the file set; `raw_sha256` picks the row).
+- `email_uid` is the direct join key from DuckDB rows into the Parquet raw
+  store; `raw_sha256` remains the content fingerprint for integrity and
+  dedup checks.
 - `attachments.content_sha256` is the only pointer we need to
   `documents/<sha256[0:2]>/<sha256>`. No `storage_ref` column.
 - `mime_parts` keeps `body_text` inline for text parts. Binary parts keep
   only metadata + `content_sha256`; the bytes live in `documents/` (if
   they're worth keeping) or aren't kept at all (ephemeral inline).
-
-> !!! The same here, i thing we should store the email uid as the primary key for the raw email too, so joining raw and tables can be easier latter eventually. Not sure if sha256 hashes are more efficient as keys that UUID v7 (which is finally a bigint).
 
 ---
 
@@ -137,25 +142,25 @@ extended to the rest of the schema where sensible).
   descriptive prefix: `internal_date_utc`, `date_header_utc`, `received_utc`.
 
 ### 0.4 Actors ("who")
-Pattern for tracking who did something (app users, not email senders):
+Pattern for tracking app users (not email senders) both as the actor who
+did something and, when relevant, the user it was done to:
 
-- **`<actor>_uid`** — FK to `users` (or equivalent). Canonical link.
-- **`<actor>_by`** — denormalized display string captured at the event
+- **`<verb>_by_uid`** — FK to `users`. Canonical actor link.
+- **`<verb>_by`** — denormalized display string captured at the event
   (e.g. `"Alice Doe <alice@acme.com>"`). Immutable snapshot; survives
   renames/deletions of the user row.
+- **`<verb>_to_uid`** — FK to `users` when the action targets another user
+  (assignee, delegate, recipient of an internal action).
+- **`<verb>_to`** — denormalized display snapshot of that target user.
 
-Examples: `created_by_uid` + `created_by`, `assigned_to_uid` + `assigned_to`,
-`updated_by_uid` + `updated_by`.
+Examples: `created_by_uid` + `created_by`, `updated_by_uid` + `updated_by`,
+`assigned_to_uid` + `assigned_to`.
 
 > **Rationale for `_by` as a snapshot:** avoids broken audit trails when the
 > referenced user changes. The `_uid` remains the relational truth; the `_by`
 > is what you show in a historical log without a join.
 > Using `creator_fullname` would be more explicit but `_by` is idiomatic and
 > short enough for frequent queries.
->
-> !!! Good conclusion. Was not sure about this but you nailed it.
->
-> !!! NOTE that '_to' as you mentioned in some exmaples may play a similar role. It si clear in any case the meaning of _by and _to. 
 
 ### 0.5 Type-suffix conventions
 
@@ -165,21 +170,23 @@ Examples: `created_by_uid` + `created_by`, `assigned_to_uid` + `assigned_to`,
 | `_utc` | UTC timestamp | `created_utc` |
 | `_by` | Actor display snapshot | `created_by` |
 | `_by_uid` | Actor FK | `created_by_uid` |
+| `_to` | Target-user display snapshot | `assigned_to` |
+| `_to_uid` | Target-user FK | `assigned_to_uid` |
 | `_kind` | Closed-set string enum (CHECK-constrained) | `role_kind` |
 | `_bytes` | Size in octets | `size_bytes` |
 | `_count` | Cardinal count | `email_count` |
 | `_sha256` | Lowercase hex SHA-256 digest | `content_sha256` |
 | `_json` | Opaque JSON blob | `params_json` |
 | `_blob` | Inline binary (`BLOB`) | `bytes_blob` |
-| `_ref` | External storage reference (path/URI) | `body_blob_ref` |
+| `_ref` | External storage reference outside `data/` | `credentials_ref` |
 | `_raw` | Unparsed original text | `value_raw`, `subject_raw` |
 | `_normalized` | Canonicalized form | `subject_normalized` |
 | `is_*` / `has_*` prefix | Boolean | `is_draft`, `has_attachments` |
 | `position` | 0-based order within a parent | `position` |
 
-> !!! need to ask the '_to' suffix convention similar to '_by'. Also '_to_uid'. 
->
-> !!! The '_ref' is ok, though i would avoid using path/URIs for internal files. In internal files refs it is preferable to use the _uid to lacate the file, for examples if it is document, it will be in the documents folder and the {uid}.{type} will be the file name. Using the sha256 content hash is valid too as a key into the documents folder. 
+For **internal** files, do not store arbitrary paths/URIs in `_ref`
+columns. Store the typed key instead (`content_sha256`, `document_uid`,
+etc.) and derive the physical path from the storage convention.
 
 ### 0.6 Enums — CHECK over ENUM
 
@@ -190,8 +197,6 @@ Closed-set fields use `TEXT` + `CHECK` (not DuckDB `ENUM`):
 - Suffix the column with `_kind`.
 
 Example: `role_kind TEXT NOT NULL CHECK (role_kind IN ('from','sender', …))`.
-
-> !!! Good catch !
 
 ### 0.7 JSON & STRUCT
 - Use native `JSON` type for open-ended / rarely-queried blobs
@@ -229,8 +234,7 @@ Re-ingesting a message creates a new `uid` (old one soft-deleted). This
 keeps DKIM verification and forensics sound.
 
 Mutable tables (state, not wire data): `accounts`, `mailboxes`,
-`sync_checkpoints`, `threads`, `email_flags` if we expose one, `keywords`,
-`email_keywords`.
+`threads`, `keywords`, `email_keywords`, and `users`.
 
 ---
 
@@ -252,7 +256,7 @@ users ──< accounts ──< mailboxes ──< emails ──┬──< email_h
                                               └──< email_keywords >── keywords
 threads ──< emails (via thread_uid)
 
-   emails.raw_sha256 ─→ data/raw/account=…/yyyy-mm=…/*.parquet  (append-only)
+   emails.uid + raw_sha256 ─→ data/raw/account=…/yyyy-mm=…/*.parquet  (append-only)
    sync state        ─→ data/lmdb/  (separate subsystem; see SYNC-MODEL.md)
 ```
 
@@ -273,9 +277,9 @@ A few design decisions worth flagging:
    dotted `part_path` ("1.2.3") for quick lookup without recursion.
 5. **Raw RFC 5322 bytes** do NOT live in DuckDB. They are written to
    append-only Parquet shards under `data/raw/account=<uid>/yyyy-mm=<YYYY-MM>/`
-   and joined on `emails.raw_sha256` when needed (DKIM re-verification,
-   export, re-parse). Keeps DuckDB analytical and makes retention a
-   file-drop.
+   and joined on `email_uid` when needed (with `raw_sha256` as the
+   integrity fingerprint for re-verification and dedup analysis). Keeps
+   DuckDB analytical and makes retention a file-drop.
 6. **Sync state is out of scope.** No tables here hold IMAP cursors,
    UIDVALIDITY watermarks, MODSEQ progress, retry counters, etc. Those
    live in LMDB under `data/lmdb/` and will be modeled in
@@ -286,26 +290,34 @@ A few design decisions worth flagging:
 ## 2. Auxiliary tables (users + accounts)
 
 Included for FK completeness. Detail belongs in another doc; keep minimal
-here.
+here. `users` are the application/server principals who sign into Unwild
+and own one or more mailbox `accounts`. Mailbox identities themselves live
+in `accounts`, not in `users`.
 
 ### 2.1 `users`
 
 ```sql
 CREATE TABLE users (
     uid              UUID        PRIMARY KEY DEFAULT uuidv7(),
-    email            TEXT        NOT NULL UNIQUE,
+    login_name       TEXT        NOT NULL UNIQUE,
     display_name     TEXT,
+    contact_email    TEXT,
     created_utc      TIMESTAMP   NOT NULL DEFAULT current_timestamp,
     updated_utc      TIMESTAMP,
     deleted_utc      TIMESTAMP
 );
 ```
 
-> !!! Just to understand what is the concept of "User" here: it is the user of the server who logins to the server and uses the App, that has a user name and password  ?
->
-> In this case the email may be incorrect as a user may have more than one email, as described in accounts.  
->
-> How will he login ? using username and password ? or sending an OTP to his email ? But how can he receive the email if he is not logged in and can not access his mails ? Maybe using Authenticator OTPs ? 
+Notes:
+
+- `login_name` is the stable application login identifier.
+- `contact_email` is optional and non-authoritative; a user may have zero,
+  one, or many real mailbox addresses in `accounts`.
+- Authentication mechanics (password hashes, passkeys, TOTP, recovery,
+  etc.) are intentionally out of scope for this document and belong in a
+  future `docs/AUTH-MODEL.md`. For v0, a plain `login_name` + password
+  flow is the default assumption; stronger auth can be layered on later
+  without changing the email relational model.
 
 
 
@@ -470,8 +482,8 @@ is a flat table with at minimum:
 
 | Column | Type | Notes |
 |---|---|---|
-| `email_uid` | UUID | Matches `emails.uid`. |
-| `raw_sha256` | TEXT | Matches `emails.raw_sha256`. |
+| `email_uid` | UUID | Logical row key; matches `emails.uid`. |
+| `raw_sha256` | TEXT | Content fingerprint; matches `emails.raw_sha256`. |
 | `size_bytes` | BIGINT | Raw message size. |
 | `bytes` | BLOB | The raw RFC 5322 envelope. |
 | `ingested_utc` | TIMESTAMP | When we wrote this shard row. |
@@ -482,18 +494,22 @@ Queryable from DuckDB when needed:
 -- Fetch the raw bytes for a given message
 SELECT r.bytes
 FROM read_parquet('data/raw/**/*.parquet', hive_partitioning = TRUE) r
-JOIN emails e ON e.raw_sha256 = r.raw_sha256
-WHERE e.uid = ?;
+JOIN emails e ON e.uid = r.email_uid
+WHERE e.uid = ?
+  AND e.raw_sha256 = r.raw_sha256;
 ```
 
 Rationale:
 - Append-only → safe for concurrent writers, cheap compaction.
+- `email_uid` gives the natural 1:1 join from the relational row to the raw
+  bytes; `raw_sha256` is still valuable for integrity checks and for finding
+  duplicate wire payloads.
 - Partitioned → predicate pushdown narrows files read.
 - Keeps DuckDB file small and scans fast for the relational model.
 - Retention = drop a partition directory.
 
-**No `raw_messages` table exists in DuckDB.** `emails.raw_sha256` is the
-pointer.
+**No `raw_messages` table exists in DuckDB.** `email_uid` is the direct
+join key; `raw_sha256` is the integrity/dedup fingerprint.
 
 ---
 
@@ -942,14 +958,16 @@ HAVING COUNT(*) > 1;
    normalized `email_flags` table for history (who marked it read, when)?
 8. **Soft-delete vs hard-delete** on `emails` re-ingest. Proposal:
    soft-delete old row + insert new; the Parquet raw row for the old one
-   stays (content-addressed by `raw_sha256`) — no cleanup needed.
+   stays keyed by its original `email_uid` row (with the same
+   `raw_sha256` fingerprint) — no cleanup needed.
 9. **Indexing strategy beyond PK/UNIQUE.** DuckDB's zone maps cover a lot;
    benchmark before adding more `CREATE INDEX`es.
 10. **DuckDB partitioning.** Do we partition `emails` by `account_uid` or
     by month of `internal_date_utc` for scanning perf?
 11. **Cross-account dedup.** Same message forwarded to two accounts —
-    two `emails` rows, same `raw_sha256` — and one shared Parquet row (or
-    two, depending on write path). Acceptable for v0.
+    two `emails` rows, two Parquet rows keyed by `email_uid`, same
+    `raw_sha256`. Acceptable for v0; true shared raw-byte storage can be
+    revisited later if space pressure makes it worth the complexity.
 12. **`data/documents/` eviction.** If a user deletes an email, do we GC
     its attachments? Content-addressed layout means other messages may
     still reference the same file (ref-count needed, or lazy sweep).
@@ -958,7 +976,7 @@ HAVING COUNT(*) > 1;
 
 ## 14. Next steps
 
-- [ ] Review this doc (`!!!` annotations).
+- [ ] Continue reviewing this doc and fold remaining decisions into clean prose.
 - [ ] Fold the table list into `docs/DATA-MODEL.md` §2 (replacing the
       placeholder for `Email`, `Thread`, `Attachment`, `Account`).
 - [ ] Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
