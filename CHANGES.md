@@ -2,6 +2,55 @@
 
 ---
 
+## Session: Bottom Dock (FloatingSearch + Compose) — 2026-04-20 (session 4)
+## Branch: main
+
+### Files Created
+1. **app/src/components/FloatingSearch.svelte** — bottom-center floating
+   pill that expands on focus into results area + auto-grow textarea.
+   Search vs Ask mode (`/ask` prefix), Search/Send/Clear buttons in a
+   non-overlapping right-side lane. `onFocusChange` prop exposes
+   expanded state.
+2. **app/src/components/BottomDock.svelte** — floating dock
+   orchestrator. Owns `mode: 'search' | 'compose'`; hides compose btn
+   while search is expanded.
+3. **app/src/components/ComposeButton.svelte** — MailPlus button
+   matching Header styling; `hidden` prop applies `invisible
+   pointer-events-none` to preserve layout.
+4. **app/src/components/ComposePanel.svelte** — top toolbar (formatter
+   slot + Expand/Close), full-width grow textarea, bottom action row
+   (Attach/Link icons left; To/Cc + black Send dropdown right,
+   `dropdown-top dropdown-end`). Maximized widens to
+   `calc(100vw - 8rem)` / `calc(100vh - 8rem)`.
+5. **app/public/circuit-bg.svg** — tiling background pattern.
+6. **docs/ui-ideas.md** — UI scratchpad.
+7. **plans/PLAN-260420-151125.md**, **plans/PLAN-260420-170455.md** —
+   archived previous plans.
+
+### Files Modified
+1. **app/src/pages/Mails.svelte** — outer container set `relative`,
+   mounted `<BottomDock />` (replaces `<FloatingSearch />`).
+2. **app/src/components/Sidebar.svelte** — smaller logo, lighter
+   separators, hover tweaks.
+3. **app/src/components/Header.svelte** — dropped unused commented
+   compose-dropdown block.
+4. **app/src/styles/app.css** — cream background + tiling SVG.
+5. **PLAN.md** / **DRAFT.md** — plans + notes for this session.
+
+### Commits
+- `00915ea` app: add FloatingSearch component on Mails page; sidebar + bg polish
+- `e35d4b3` app: add BottomDock with ComposePanel + ComposeButton
+- `d1dd0ca` session 4 close: MEMO + CHANGES + LEARNINGS + TODO
+
+### Known issues
+- Maximized ComposePanel cannot anchor to viewport top (`2rem` gap)
+  because it lives inside a `-translate-x-1/2` dock +
+  `overflow-hidden` page container; `position: fixed` failed
+  (transformed ancestor forms its own containing block). Deferred —
+  see LEARNINGS L9/L10.
+
+---
+
 ## Session: Resolve merge conflicts — 2026-04-20
 ## Branch: main
 
