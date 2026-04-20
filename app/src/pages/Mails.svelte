@@ -1,5 +1,6 @@
 <script lang="ts">
   import { MoreVertical } from 'lucide-svelte'
+  import FloatingSearch from '../components/FloatingSearch.svelte'
   import { rpcGet } from '../lib/rpc-client.effects.ts'
 
   let status = $state<'idle' | 'pinging' | 'ok' | 'err'>('idle')
@@ -20,7 +21,7 @@
 </script>
 
 <!-- Page pattern: h-full flex col => fixed toolbar + scrollable content -->
-<div class="h-full flex flex-col --border border-dashed overflow-hidden">
+<div class="relative h-full flex flex-col --border border-dashed overflow-hidden">
 
   <!-- Breadcrumbs -->
   <div class="shrink-0 font-mono text-xs font-bold mt-0">
@@ -90,4 +91,6 @@
     <div class="my-2">Algo .... </div>
     <div class="my-2">Algo 200.... </div>
   </div>
+
+  <FloatingSearch />
 </div>

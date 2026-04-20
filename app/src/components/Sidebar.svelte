@@ -30,24 +30,25 @@
     class="flex items-center justify-center py-3"
     aria-label="unwild.email home"
     >
-    <img src="./unwild-logo.svg" alt="unwild.email" class="h-10 w-auto" />
+    <img src="./unwild-logo.svg" alt="unwild.email" class="h-7 w-auto" />
   </a>
-  <hr class="my-1 border-gray-400 mx-3" />
+
+  <hr class="my-2 border-gray-300 mx-3" />
 
   <ul class="p-0 m-0 mt-2">
     {#each items as it, i (it.tag)}
       {#if it.admin && i > 0 && !items[i - 1]?.admin}
         <li class="menu-title">
-          <hr class="my-1 border-gray-400" />
+          <hr class="my-1 border-gray-300 mx-0" />
         </li>
       {/if}
-      <li class="m-0 p-0 w-full text-center hover:bg-gray-200">
+      <li class="m-0 p-0 w-full text-gray-500 text-center">
         <a
           href={hrefFor(it.tag)}
           title={it.label}
-          class={"inline-block"}
+          class={"inline-block --border rounded-sm hover:bg-gray-800 hover:text-white"}
           >
-          <it.icon class="size-6.75 text-gray-700 my-3 mx-2" />
+          <it.icon class="size-5 m-3" />
         </a>
       </li>
     {/each}
