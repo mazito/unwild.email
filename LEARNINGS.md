@@ -4,6 +4,27 @@ Critical learnings to avoid repeating mistakes.
 
 ---
 
+## 2026-04-20
+
+### L9 — `position: fixed` fails inside a CSS-transformed ancestor
+**Rule:** Any ancestor with `transform`, `perspective`, `filter`, `will-change:
+transform`, etc. becomes the containing block for descendants with
+`position: fixed`. If you need true viewport positioning, hoist the element
+outside the transformed ancestor (portal / sibling at app root).
+**Why:** BottomDock uses `-translate-x-1/2` to center itself. When the
+ComposePanel inside tried `position: fixed` to anchor 2rem from viewport top,
+it effectively collapsed/vanished because its positioning was resolved
+relative to the zero-sized transformed dock wrapper, not the viewport.
+
+### L10 — Floating panels: decide container-bound vs viewport-bound up front
+**Rule:** A floating UI that can grow to fill the viewport should not live
+inside a page container with `overflow-hidden` + a transformed wrapper. Mount
+it at the app shell level (or portal it there) before adding a "maximize"
+mode.
+**Why:** Compose panel grew correctly while bounded to the Mails container,
+but maximized mode needed to escape both the header clip and the dock
+transform. Cheaper to plan the mount point than to retrofit.
+
 ## 2026-04-17
 
 ### L1 — Never overwrite a file the user is actively editing
