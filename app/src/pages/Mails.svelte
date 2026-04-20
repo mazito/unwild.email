@@ -1,6 +1,6 @@
 <script lang="ts">
   import { MoreVertical } from 'lucide-svelte'
-  import FloatingSearch from '../components/FloatingSearch.svelte'
+  import BottomDock from '../components/BottomDock.svelte'
   import { rpcGet } from '../lib/rpc-client.effects.ts'
 
   let status = $state<'idle' | 'pinging' | 'ok' | 'err'>('idle')
@@ -92,5 +92,5 @@
     <div class="my-2">Algo 200.... </div>
   </div>
 
-  <FloatingSearch />
+  <BottomDock />
 </div>

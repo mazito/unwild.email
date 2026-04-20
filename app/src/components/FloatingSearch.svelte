@@ -1,6 +1,11 @@
 <script lang="ts">
   import { Search, Send, X } from 'lucide-svelte'
 
+  interface Props {
+    onFocusChange?: (expanded: boolean) => void
+  }
+  let { onFocusChange }: Props = $props()
+
   let focused = $state(false)
   let value = $state('')
   let results = $state<string[]>([])
@@ -107,13 +112,18 @@
       textareaEl.setSelectionRange(n, n)
     }
   })
+
+  // Notify parent whenever expanded state changes (for hiding sibling compose btn).
+  $effect(() => {
+    onFocusChange?.(expanded)
+  })
 </script>
 
 <div
   bind:this={rootEl}
   class="
-    absolute bottom-6 left-1/2 -translate-x-1/2 w-[34rem] max-w-[calc(100vw-2rem)]
-    rounded-sm border border-base-300 bg-base-100 shadow-lg flex flex-col overflow-hidden z-20
+    w-[34rem] max-w-[calc(100vw-2rem)]
+    rounded-sm border border-base-300 bg-base-100 shadow-lg flex flex-col overflow-hidden
     ps-2
   "
   style="max-height: calc(100vh - 6rem);"

@@ -25,56 +25,6 @@
     </div>
   </div>
 
-  <div class="flex justify-center items-center rounded-md p-0 m-0 mt-2 --border border-gray-100">
-      <div class={
-          "bg-white flex items-center justify-start ps-4 border border-gray-300 rounded-md h-10 w-80 pe-1 me-0.5"+
-          " hover:bg-gray-300"
-        }>
-        <!--input-baseinput-bordered flex items-center gap-2 w-full max-w-lg py-0 h-12 rounded-md"-->
-        <Search class="size-4 me-3" />
-        <input type="search" placeholder="Search…" bind:value={searchValue}
-          class={"text-base grow py-1 px-2 rounded-md"+" focus:bg-white hover:bg-white"}
-        />
-      </div>
-
-      <a
-        href={hrefFor('compose')}
-        class={
-          "h-10 w-12 flex items-center justify-center rounded-md bg-white border border-gray-300"+
-          " hover:bg-gray-300"
-        }
-        aria-label="Compose email ..."
-        title="Compose email ..."
-        tabindex="0"
-        role="button"
-        >
-        <MailPlus class="size-6 text-gray-600" />
-      </a>
-      <!-- <div class="dropdown dropdown-end">
-        <ul class="menu menu-md dropdown-content bg-base-100 rounded-box z-50 mt-3 w-42 p-1 shadow border border-base-300 pb-2">
-          <li class="">
-            <a href={hrefFor('profile')}>
-              <MailPlus class="size-4 opacity-60 me-1" />
-              Compose <br/>Email
-            </a>
-          </li>
-          <hr class="my-2 border-base-300" />
-          <li>
-            <a href={hrefFor('profile')}>
-              <Plus class="size-4 opacity-60 me-1" />
-              People
-            </a>
-          </li>
-          <li>
-            <a href={hrefFor('profile')}>
-              <Plus class="size-4 opacity-60 me-1" />
-              Organizations
-            </a>
-          </li>
-        </ul>
-      </div> -->
-  </div>
-
   <div class="flex items-center justify-end">
     <div class="dropdown dropdown-end me-2">
       <div

@@ -8,26 +8,43 @@ We will be dong some client UI work
 
 ## DESIGN
 
-I want a small floating Input box at the bottom and center of the content area, 
-about 30rem width aprox that:
+Now we will add the Compose Email button to the bottom floating area.
 
-When not focused it is just a small input with a search button on the right. 
-Use a rounded-sm border for the full box and NO border for the input 
-and search button inside the box.
+Look as "Compose email" button in the Header for the btn we want to add.
 
-When focused it transforms into a full panel that grows from the bottom up.
-The panel has 2 areas: 
+Now the bottom floating area will have 2 horizaontal area:
 
-1) A top area where we will be showing search results. 
-- This area should grow when the content grows.
+1) The FloatingSearch we already completed
+2) To the right of it as an independent btn (NOT inside the search area) we will 
+  have the "Compose email" btn
 
-2) A bottom area that has 
-  - An autogrow "textarea" that grows in size as user types, to a max of 5 lines.
-  - The search btn at the top right of the bottom area.
+How does it work:
 
-The total heighht of the 2 areas must not exceed the window height minus some 4rems.
+1) when we focus on the Search input it works exactly as it is working now, with 
+  a small twist: when serach is focused the "Compose" btn should be HIDDEN.
 
-For now simulate we are adding paragraphs with 2 lines each paragraph as the user types.
+2) NOW when we click the "Compose" btn the following happens:
+  - the Search area is HIDDEN now
+  - in its place appears the Compose panel
+  
+The compose panel: This is a panel of same width than the results top panel. It has 2 parts:
 
+Top panel: 
+- The top panel is "a growing edit area", that grows as the text grows, it tops
+ at the top of the screen minus 7rem (like the resuklts panel before)
+- It must have overlaid buttons on top right: [Expand] and [Close] 
+- Close will close all and go back to 
 
+Bottom buttons area: 
+- separated in left and right email btns
+- left: [Attachs] [Links]
+- Right: ["To"] ["Cc"] [Send]  
+
+Notes:
+- "Attachs" can add files to the email
+- "Links" can add links to the email
+- The "To" and "Cc" buttons dont have an icon, just the text labels. Latter we will see what they do.
+- "Send" is a drowdown primary btn with be "Send now" or "Save as draft" options
+- Now we will not have a WYSIWYG editor/formatter (Later may be). Formater 
+  options may go in the top left of the composer panel.
 
