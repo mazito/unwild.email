@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte'
   import { BookText, Gauge, Rocket, Activity, SlidersHorizontal, Users, Mails } from 'lucide-svelte'
-  import { hrefFor, type Route } from '../lib/router.ts'
-  import { route } from '../lib/router.svelte.ts'
+  import { hrefFor, type Route, route } from '../router.svelte.ts'
 
   interface Item {
     tag: Exclude<Route['tag'], 'notfound'>
@@ -12,7 +11,7 @@
   }
 
   const items: Item[] = [
-    { tag: 'home', label: 'Mails', icon: Mails },
+    { tag: 'mails', label: 'Mails', icon: Mails },
     { tag: 'documents', label: 'Documents & Files', icon: BookText },
     { tag: 'contacts', label: 'Persons & Orgs', icon: Users },
     { tag: 'profile', label: 'Advanced Options', icon: Rocket },
@@ -27,7 +26,7 @@
 
 <aside class="bg-base-100 border-r border-base-300 min-h-full w-60 lg:w-16 flex flex-col">
   <a
-    href={hrefFor('home')}
+    href={hrefFor('')}
     class="flex items-center justify-center py-3"
     aria-label="unwild.email home"
     >

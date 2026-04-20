@@ -79,9 +79,13 @@ server/
    from the blob-store key here: `uid` is best for rows and joins, while
    `content_sha256` is best for file storage because identical bytes collapse
    to one object, integrity is self-checking, and the path is a pure
-   function of the bytes. If we later promote a semantic `documents` row in
-   `docs/DATA-MODEL.md`, that row can still have its own UUIDv7 while
-   pointing at the same `content_sha256` object.
+   function of the bytes. No directory index needed — DuckDB rows carry the
+   sha256 and the path is a pure function of it. The logical email↔file
+   relation is carried by the `attachments` table (§7.2): one row per
+   attachment-in-email, `content_sha256` links to the physical file. If we
+   later promote a semantic `documents` row in `docs/DATA-MODEL.md`, that
+   row can still have its own UUIDv7 while pointing at the same
+   `content_sha256` object.
 
 5. **No inline `BLOB` columns** in DuckDB for either raw messages or
    attachment bodies. If we ever need to co-locate a few small inline
@@ -162,6 +166,7 @@ Examples: `created_by_uid` + `created_by`, `updated_by_uid` + `updated_by`,
 > Using `creator_fullname` would be more explicit but `_by` is idiomatic and
 > short enough for frequent queries.
 
+
 ### 0.5 Type-suffix conventions
 
 | Suffix | Meaning | Example |
@@ -178,15 +183,21 @@ Examples: `created_by_uid` + `created_by`, `updated_by_uid` + `updated_by`,
 | `_sha256` | Lowercase hex SHA-256 digest | `content_sha256` |
 | `_json` | Opaque JSON blob | `params_json` |
 | `_blob` | Inline binary (`BLOB`) | `bytes_blob` |
-| `_ref` | External storage reference outside `data/` | `credentials_ref` |
+| `_ref` | **External** storage reference (S3 URL, remote http, etc.). Internal files located by pure function of a key — no stored path. | `external_body_ref` |
 | `_raw` | Unparsed original text | `value_raw`, `subject_raw` |
 | `_normalized` | Canonicalized form | `subject_normalized` |
 | `is_*` / `has_*` prefix | Boolean | `is_draft`, `has_attachments` |
 | `position` | 0-based order within a parent | `position` |
 
-For **internal** files, do not store arbitrary paths/URIs in `_ref`
-columns. Store the typed key instead (`content_sha256`, `document_uid`,
-etc.) and derive the physical path from the storage convention.
+> **Convention for internal files:** never store a path. Location is a
+> pure function of a key, resolved at read time:
+>
+> - `data/documents/<content_sha256>` for attachment bytes.
+> - `data/raw/account=<account_uid>/yyyy-mm=<YYYY-MM>/*.parquet` joined
+>   on `email_uid` for raw RFC 5322 bytes.
+>
+> `_ref` is reserved for **external** resources where we have no choice
+> but to keep the opaque locator.
 
 ### 0.6 Enums — CHECK over ENUM
 
@@ -296,6 +307,11 @@ in `accounts`, not in `users`.
 
 ### 2.1 `users`
 
+A `user` is an **app/server user** — the human who logs into the Unwild
+UI. This is distinct from the email `accounts` they own (a user has
+0..N accounts). Auth details (password hashing, 2FA, recovery) are
+**out of scope here** and deferred to `docs/AUTH-MODEL.md`.
+
 ```sql
 CREATE TABLE users (
     uid              UUID        PRIMARY KEY DEFAULT uuidv7(),
@@ -403,6 +419,7 @@ two rows; dedup happens via `message_id` + `raw_sha256` at a higher layer).
 ```sql
 CREATE TABLE emails (
     uid                         UUID        PRIMARY KEY DEFAULT uuidv7(),
+    account_uid                 UUID        NOT NULL REFERENCES accounts(uid),   -- denormalized from mailboxes.account_uid; simplifies partitioning & raw-Parquet joins
     mailbox_uid                 UUID        NOT NULL REFERENCES mailboxes(uid),
     thread_uid                  UUID        REFERENCES threads(uid),
 
@@ -468,6 +485,7 @@ CREATE INDEX emails_raw_sha256_idx        ON emails (raw_sha256);
 CREATE INDEX emails_internal_date_idx     ON emails (internal_date_utc);
 CREATE INDEX emails_from_domain_idx       ON emails (from_registrable_domain);
 CREATE INDEX emails_thread_idx            ON emails (thread_uid);
+CREATE INDEX emails_account_idx           ON emails (account_uid);
 ```
 
 > **Note on denormalized `from_*`:** duplicated from `email_addresses` for
@@ -491,7 +509,7 @@ is a flat table with at minimum:
 Queryable from DuckDB when needed:
 
 ```sql
--- Fetch the raw bytes for a given message
+-- Fetch the raw bytes for a given message (join on email_uid)
 SELECT r.bytes
 FROM read_parquet('data/raw/**/*.parquet', hive_partitioning = TRUE) r
 JOIN emails e ON e.uid = r.email_uid
@@ -976,7 +994,7 @@ HAVING COUNT(*) > 1;
 
 ## 14. Next steps
 
-- [ ] Continue reviewing this doc and fold remaining decisions into clean prose.
+- [x] Review this doc (`!!!` annotations) — resolved; see Decision notes inline.
 - [ ] Fold the table list into `docs/DATA-MODEL.md` §2 (replacing the
       placeholder for `Email`, `Thread`, `Attachment`, `Account`).
 - [ ] Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
