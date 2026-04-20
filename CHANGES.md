@@ -1,4 +1,19 @@
-# CHANGES.md - Session: Router cleanup + resolve EMAILS-BASE-MODEL review
+# CHANGES.md
+
+---
+
+## Session: Resolve merge conflicts — 2026-04-20
+## Branch: main
+
+### Files Modified
+1. **docs/EMAILS-BASE-MODEL.md** — resolved 6 merge conflict markers (HEAD chosen in all cases).
+
+### Commits
+- `f4f972a` fix: resolve merge conflicts in EMAILS-BASE-MODEL.md
+
+---
+
+# Session: Router cleanup + resolve EMAILS-BASE-MODEL review
 
 ## Date: 2026-04-18 (session 3)
 ## Branch: main

@@ -1,6 +1,61 @@
 # MEMO — Session State
 
-## Last Session — 2026-04-19
+## Last Session — 2026-04-20
+
+### Branch
+`main`
+
+### Summary
+Short housekeeping session. Resolved 6 pending git merge conflicts in
+`docs/EMAILS-BASE-MODEL.md` and pushed to origin.
+
+### What was done
+1. Read session files (AGENTS.md, MEMO.md, LEARNINGS.md, TODO.md).
+2. Detected 6 merge conflict markers in `docs/EMAILS-BASE-MODEL.md`:
+   - §0.6 trailing blank lines after enum section.
+   - §2.1 `users` table column names (`login_name` / `contact_email` vs
+     `username` / `login_email` + auth columns). Kept HEAD version
+     (`login_name` + `contact_email`, auth out-of-scope note).
+   - §2.1 notes block (HEAD prose vs incoming `> Decision:` block). Kept HEAD.
+   - §4.2 Parquet table `email_uid` description wording. Kept HEAD.
+   - §4.2 sample SQL query (`AND e.raw_sha256 = r.raw_sha256` line). Kept HEAD.
+   - §4.2 closing note wording. Kept HEAD.
+3. Committed merge (`f4f972a`), pulled (already up to date), pushed.
+
+### Current state — what works
+- `main` is clean, no conflict markers anywhere.
+- `docs/EMAILS-BASE-MODEL.md` is the authoritative version with HEAD choices.
+
+### Pending / next steps
+1. Review `docs/EMAIL-DATA.md` with the user — validate priority buckets
+   (🟢🟡🔵), answer §19 open questions, decide which derived fields (§16)
+   are v0.
+2. Fold EMAIL-DATA findings back into `docs/DATA-MODEL.md` §2 and §7 checklist.
+3. Continue reviewing `docs/EMAILS-BASE-MODEL.md` if user adds more comments;
+   then fold approved tables into `docs/DATA-MODEL.md`.
+4. Work through `docs/DATA-MODEL.md` §7 checklist to unblock P3.
+5. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
+6. Add `svelte-check` to `bun run check` pipeline.
+7. Polish app shell (real logo vector, theme switcher, mobile drawer).
+
+### Blockers / open questions
+1. Parquet shard/rollover policy.
+2. `content_sha256` text vs blob representation.
+3. Threading scope (per-account vs global).
+4. Keyword scope (per-account vs per-user).
+5. Attachment GC strategy.
+
+### Important decisions made and why
+- Kept HEAD version of all conflicts (more complete prose, auth-out-of-scope
+  note, `login_name` naming convention already reviewed and accepted).
+
+### Key files changed this session
+- `docs/EMAILS-BASE-MODEL.md` — merge conflicts resolved.
+- `MEMO.md`, `CHANGES.md` — session bookkeeping.
+
+---
+
+## Previous Session — 2026-04-19
 
 ### Branch
 `main`
@@ -40,88 +95,6 @@ Docs only; no code changes.
    align with `email_uid`-based joins.
 4. Updated the conventions and `users` section to match the user's review.
 
-### Pending / next steps
-1. Continue the review in case the user adds more comments.
-2. Fold the approved email tables into `docs/DATA-MODEL.md` §2.
-3. Draft `docs/SYNC-MODEL.md` for the LMDB-backed sync subsystem.
-4. Decide Parquet shard/rollover policy.
-5. Implement migration runner under `server/` and land `001_init.sql`.
-6. Swap JSON → CBOR in `lib/src/rpc/cbor.ts`.
-7. Add `svelte-check` to `bun run check`.
-
-### Blockers / open questions
-1. No blocker for the docs pass.
-2. Still open at model level: Parquet shard policy, `content_sha256` text vs
-   blob representation, threading scope, keyword scope, attachment GC.
-
-### Important decisions made and why
-1. Keep `content_sha256` as the on-disk key in `data/documents/` because it
-   gives content-addressed dedup and a path that is a pure function of the
-   bytes.
-2. Treat `email_uid` as the logical raw-row key because it makes joins from
-   DuckDB straightforward, while `raw_sha256` still covers integrity and
-   duplicate-payload analysis.
-3. Keep authentication modeling out of the email schema doc to avoid mixing
-   mailbox persistence concerns with app-auth design.
-
 ### Key files changed this session
 - `docs/EMAILS-BASE-MODEL.md` — review comments resolved and prose cleaned.
 - `MEMO.md`, `TODO.md`, `CHANGES.md` — session bookkeeping.
-
----
-
-## Previous Session — 2026-04-18 (session 3)
-
-### Summary
-Mixed session: small UI fix in `app/` + resolved all `!!!` review threads
-in `docs/EMAILS-BASE-MODEL.md` and spun out `docs/AUTH-MODEL.md`.
-
-### UI (app/)
-- `#/mails` route was broken (sidebar link → NotFound). Router lived in
-  `app/src/lib/router*.ts` which user found unclear.
-- Consolidated both router files into a single
-  `app/src/router.svelte.ts` next to `App.svelte`, with an inline header
-  comment explaining how the hash router works and how to add a page.
-- Deleted `app/src/lib/router.ts` and `app/src/lib/router.svelte.ts`.
-- Added a real `Home` page (`app/src/pages/Home.svelte`).
-  - `#/` and `#/home` → Home (landing page with links).
-  - `#/mails` → Mails page (the one that does RPC ping).
-- Updated imports in `App.svelte`, `Sidebar.svelte`, `Header.svelte`.
-- Sidebar logo now links to `home`.
-- Committed `c49279a` and pushed.
-
-### Docs
-Resolved the 5 `!!!` threads in `docs/EMAILS-BASE-MODEL.md`:
-
-1. **Documents filename** → keep `content_sha256` (free dedup,
-   self-proving integrity). The email↔file relation is still carried by the
-   existing `attachments` table (§7.2). Decision note inline.
-2. **Raw Parquet join key** → `email_uid` (not `raw_sha256`).
-   `raw_sha256` stays as verification/dedup column. Updated §4.2 table,
-   sample query, and footer note.
-3. **`_to` suffix** → added as sibling of `_by` in §0.4 and §0.5.
-   Semantic: `_by` = subject, `_to` = object. Snapshot rationale same.
-4. **`_ref` suffix** → restricted to **external** resources only
-   (S3 URL, remote http). Internal files located by pure function of a
-   key (`data/documents/<content_sha256>`, raw Parquet by `email_uid`).
-   Added convention block to §0.5.
-5. **`users` concept** → rewrote §2.1. App-user, not email address.
-   Fields: `username UNIQUE`, `display_name`, `login_email` (recovery
-   only, not auth, not unique), `password_hash`, `totp_secret`. No
-   `email UNIQUE`. Auth details deferred to new `docs/AUTH-MODEL.md`.
-
-Also added `account_uid` FK to `emails` table (denormalized from
-`mailboxes.account_uid`) so partitioning and raw-Parquet joins are
-trivial without a 3-way join. Added matching index.
-
-### New doc
-`docs/AUTH-MODEL.md` — stub covering:
-- Core principle: login identity ≠ email address.
-- Proposed `users` fields (mirrors §2.1).
-- Flows: username+password (argon2id) → optional TOTP 2FA → recovery
-  via optional `login_email`.
-- Out-of-scope for v1 (OAuth, WebAuthn, org/role model).
-- Open questions (session storage, bootstrap, rate-limit, admin role).
-
-### Commits this session
-- `c49279a` app: fix Mails route, move router next to App, add Home page
