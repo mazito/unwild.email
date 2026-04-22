@@ -1,6 +1,57 @@
 # MEMO — Session State
 
-## Last Session — 2026-04-20
+## Last Session — 2026-04-22
+
+### Branch
+`main`
+
+### Summary
+Variant UI experiment: replaced the old monolithic app with a clean Action-First UI scaffold. The old codebase was archived as `app-classic`. The new `app/` holds a minimal Svelte 5 project with hash-router navigation across four pages (Todo, Waiting, Protected, Account). Only Todo has content: a white card with "New (todo)" and "Done" sections, grouping messages by sender with thread lines and timestamps.
+
+### What was done
+1. Renamed existing `app/` → `app-classic/` (full archive of prior SPA).
+2. Scaffoled a clean `app/` workspace with `package.json`, `vite.config.ts`, `svelte.config.js`, `tsconfig.json`, `index.html`, `src/main.ts`, `src/app.css`, `src/vite-env.d.ts`.
+3. Replaced Tailwind palette with bespoke Unwild tokens (`--color-uw-bg`, `--color-uw-card`, `--color-uw-text`, `--color-uw-muted`, `--color-uw-line`, `--color-uw-orange`, `--color-uw-red`, `--color-uw-teal`).
+4. Wrote `router.svelte.ts`: `#/` → Todo, `#/waiting` → Waiting, `#/protected` → Protected, `#/account` → Account, plus `notfound` catch-all.
+5. Wrote `App.svelte` with fixed header + routed main area.
+6. Wrote `AppHeader.svelte`:
+   - Logo with `Sprout` icon + "nwild / your email" lockup,
+   - Three nav links with underline active state,
+   - Gradient avatar ring linking to Account (added `aria-label` to silence a11y warning).
+7. Wrote `SenderBlock.svelte`: colored initial avatar, sender name, thread lines (`In :>` / `Re <:`), timestamps.
+8. Wrote `SectionHeader.svelte`: bold uppercase title + hairline + "Grouped by" / "Ordered by" action button with `LayoutGrid` icon.
+9. Wrote page components:
+   - `TodoPage.svelte` with two sections and mock sender data.
+   - `WaitingPage.svelte`, `ProtectedPage.svelte`, `AccountPage.svelte` as empty placeholders.
+10. Verified build (`bun run build`) — clean, no errors.
+
+### Current state — what works
+- `bun run build` succeeds in the new `app/` workspace.
+- Navigation between tabs works via hash routes.
+- Design from the wireframe is roughly reproduced (white card, section headers, sender blocks).
+
+### Pending / next steps
+1. Wire `SenderBlock` and `SectionHeader` to real API data once endpoints exist.
+2. Implement content for Waiting, Protected, and Account pages.
+3. Add search / filter.
+4. Add compose / reply flows.
+5. Restore the `svelte-check` step in the root `check` script and update `tsconfig.json` include path.
+
+### Blockers / open questions
+- None from this session.
+
+### Important decisions made and why
+- Archive-don't-delete: renaming `app` → `app-classic` lets us switch back or cherry-pick components easily.
+- Hash router in `router.svelte.ts` stays single-file, zero-deps, just like the classic app.
+- Inline `style="background-color: {color}"` used for sender avatars because Tailwind v4 arbitrary values (`bg-[#…]`) were balked at by the build step during rapid iteration.
+
+### Key files changed this session
+- `app/` (entire workspace recreated)
+- `app-classic/` (renamed from previous `app/`)
+
+---
+
+## Previous Session — 2026-04-20
 
 ### Branch
 `main`
@@ -90,9 +141,9 @@ Docs only; no code changes.
 ### What is done
 1. Resolved the five review threads captured in the previous memo.
 2. Kept `data/documents/` on `content_sha256` and documented why that is a
-   blob-store key, not a relational key.
+  blob-store key, not a relational key.
 3. Updated the raw-bytes section, sample query, and open questions so they
-   align with `email_uid`-based joins.
+  align with `email_uid`-based joins.
 4. Updated the conventions and `users` section to match the user's review.
 
 ### Key files changed this session

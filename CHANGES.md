@@ -1,8 +1,44 @@
 # CHANGES.md
 
+# CHANGES.md - Session: Variant UI experiment (Action-First scaffold)
+
+## Date: 2026-04-22
+## Branch: main
+
+### Files Modified
+1. **app/** — entire workspace replaced (see Files Created below). Old codebase archived as `app-classic/`.
+2. **tsconfig.json** — include paths still point to `app/src/**` (valid for new workspace). No structural change.
+3. **MEMO.md** — session state updated.
+4. **CHANGES.md** — this entry appended.
+
+### Files Created
+1. **app/package.json** — new workspace deps: `svelte ^5.1.9`, `lucide-svelte`, `@unwild/lib`, Tailwind v4 + daisyUI v5, Vite.
+2. **app/vite.config.ts** — `tailwindcss()` + `svelte()` plugins.
+3. **app/svelte.config.js** — `vitePreprocess`.
+4. **app/tsconfig.json** — extends root, includes `src`.
+5. **app/index.html** — minimal SPA shell, `src/main.ts` entry.
+6. **app/src/main.ts** — `mount(App)`.
+7. **app/src/app.css** — `@import "tailwindcss"`, `@plugin "daisyui"`, bespoke Unwild theme tokens (`uw-bg`, `uw-card`, `uw-text`, `uw-muted`, `uw-line`, `uw-orange`, `uw-red`, `uw-teal`).
+8. **app/src/vite-env.d.ts** — Svelte + Vite types.
+9. **app/src/router.svelte.ts** — hash router for four routes: `#/` → Todo, `#/waiting` → Waiting, `#/protected` → Protected, `#/account` → Account.
+10. **app/src/App.svelte** — shell: `AppHeader` + routed `<main>`.
+11. **app/src/components/AppHeader.svelte** — logo (`Sprout` + "nwild / your email"), three nav tabs with underline active state, gradient avatar → Account.
+12. **app/src/components/SenderBlock.svelte** — colored initial-circle avatar, sender name, thread lines (`In :>` / `Re <:`), timestamps.
+13. **app/src/components/SectionHeader.svelte** — uppercase title + hairline + sort/group button (`LayoutGrid` icon).
+14. **app/src/pages/TodoPage.svelte** — white card with "New (todo)" and "Done" sections, mock sender data.
+15. **app/src/pages/WaitingPage.svelte** — placeholder.
+16. **app/src/pages/ProtectedPage.svelte** — placeholder.
+17. **app/src/pages/AccountPage.svelte** — placeholder.
+
+### Files Renamed / Moved
+1. **app/** → **app-classic/** (full archive of previous Svelte 5 SPA).
+
+### Commits
+- (pending)
+
 ---
 
-## Session: Bottom Dock (FloatingSearch + Compose) — 2026-04-20 (session 4)
+# CHANGES.md (FloatingSearch + Compose) — 2026-04-20 (session 4)
 ## Branch: main
 
 ### Files Created

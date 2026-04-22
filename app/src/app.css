@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@theme {
+  --color-uw-bg: #F4F6F5;
+  --color-uw-card: #FFFFFF;
+  --color-uw-text: #1A1A1A;
+  --color-uw-muted: #6B7280;
+  --color-uw-line: #E5E7EB;
+  --color-uw-orange: #F4A261;
+  --color-uw-red: #E63946;
+  --color-uw-teal: #2A9D8F;
+}
