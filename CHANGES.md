@@ -34,7 +34,7 @@
 1. **app/** → **app-classic/** (full archive of previous Svelte 5 SPA).
 
 ### Commits
-- (pending)
+- `621ee3a` app: variant UI scaffold - Todo/Waiting/Protected/Account with sender-block design
 
 ---
 
